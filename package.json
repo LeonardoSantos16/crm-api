@@ -10,7 +10,11 @@
   "scripts": {
     "dev": "node --watch --env-file=.env src/index.ts",
     "start": "node src/index.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "",
@@ -22,6 +26,7 @@
     "@types/supertest": "^7.2.1",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
+    "jiti": "^2.7.0",
     "prettier": "^3.9.10",
     "prisma": "^7.10.1",
     "supertest": "^7.3.1",
