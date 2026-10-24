@@ -123,7 +123,7 @@ describe("POST /api/opportunities/:id/follow-up", () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
-      expect(await detailOf(id)).toMatchObject({ timeline: [] });
+      expect(await detailOf(id)).toMatchObject({ lastContactAt: null });
     });
   });
 

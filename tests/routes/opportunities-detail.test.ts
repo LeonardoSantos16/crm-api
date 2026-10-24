@@ -223,4 +223,86 @@ describe("GET /api/opportunities/:id", () => {
       });
     });
   });
+
+  describe("escalation", () => {
+    const caseUser = async (name: string) => {
+      await resetDatabase();
+      await seedCaseData(prisma);
+      return prisma.user.findFirstOrThrow({ where: { name } });
+    };
+
+    it("shows OPP-2004 as escalated by the deadline on 2026-10-15", async () => {
+      const carla = await caseUser("Carla");
+
+      const res = await getDetail(2004, carla);
+
+      expect(res.body).toMatchObject({
+        alert: { state: "ESCALATED" },
+        timeline: [
+          {
+            type: "ESCALATED",
+            cause: "DEADLINE",
+            date: "2026-10-15",
+            at: "2026-10-15T03:00:00.000Z",
+            author: null,
+          },
+          { type: "CREATED" },
+        ],
+      });
+    });
+
+    it("does not show an escalation for OPP-2002, which only needs attention", async () => {
+      const bruno = await caseUser("Bruno");
+
+      const res = await getDetail(2002, bruno);
+
+      expect(res.body).toMatchObject({
+        alert: { state: "ATTENTION" },
+        timeline: [{ type: "CREATED" }],
+      });
+    });
+
+    it("shows the escalation by snoozes at the second snooze in a row", async () => {
+      const firstAt = new Date("2026-10-15T10:00:00-03:00");
+      const secondAt = new Date("2026-10-16T09:00:00-03:00");
+      const snoozeAt = (at: Date, id: number, until: string) =>
+        request(createApp({ clock: () => at }))
+          .post(`/api/opportunities/${id}/snooze`)
+          .set("X-User-Id", String(ana.id))
+          .send({ until });
+      const { id } = await opportunityOf(ana);
+      await snoozeAt(firstAt, id, "2026-10-20");
+
+      const res = await snoozeAt(secondAt, id, "2026-10-22");
+
+      expect(res.body).toMatchObject({
+        alert: { state: "ESCALATED" },
+        timeline: [
+          {
+            type: "ESCALATED",
+            cause: "SNOOZES",
+            at: secondAt.toISOString(),
+            date: "2026-10-16",
+            author: null,
+          },
+          { type: "SNOOZE", until: "2026-10-22" },
+          { type: "SNOOZE", until: "2026-10-20" },
+        ],
+      });
+    });
+
+    it("drops the escalation after a follow-up", async () => {
+      const carla = await caseUser("Carla");
+
+      const res = await request(app)
+        .post("/api/opportunities/2004/follow-up")
+        .set("X-User-Id", String(carla.id))
+        .send({});
+
+      expect(res.body).toMatchObject({
+        alert: { state: "ON_TIME" },
+        timeline: [{ type: "FOLLOW_UP" }, { type: "CREATED" }],
+      });
+    });
+  });
 });
