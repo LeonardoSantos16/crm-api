@@ -3,6 +3,9 @@ import type { Prisma } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 import type { CurrentUser } from "./users.service.ts";
 
+export const opportunityNotFound = () =>
+  new AppError(404, "NOT_FOUND", "Opportunity not found");
+
 export function visibleOpportunitiesWhere(
   user: CurrentUser,
 ): Prisma.OpportunityWhereInput {
@@ -11,12 +14,14 @@ export function visibleOpportunitiesWhere(
     : { ownerId: user.id };
 }
 
-export async function findVisibleOpportunity(user: CurrentUser, id: number) {
-  const opportunity = await prisma.opportunity.findFirst({
+export async function findVisibleOpportunity(
+  user: CurrentUser,
+  id: number,
+  db: Prisma.TransactionClient = prisma,
+) {
+  const opportunity = await db.opportunity.findFirst({
     where: { id, ...visibleOpportunitiesWhere(user) },
   });
-  if (!opportunity) {
-    throw new AppError(404, "NOT_FOUND", "Opportunity not found");
-  }
+  if (!opportunity) throw opportunityNotFound();
   return opportunity;
 }

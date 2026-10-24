@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { getHealth } from "../controllers/health.controller.ts";
+import { postMove } from "../controllers/opportunities.controller.ts";
 import { getUsers } from "../controllers/users.controller.ts";
+import { requireUser } from "../middlewares/identity.ts";
 
 export const routes = Router();
 
@@ -10,3 +12,8 @@ const api = Router();
 routes.use("/api", api);
 
 api.get("/users", getUsers);
+
+const opportunities = Router();
+api.use("/opportunities", requireUser, opportunities);
+
+opportunities.post("/:id/move", postMove);
