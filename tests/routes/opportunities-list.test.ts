@@ -225,7 +225,7 @@ describe("GET /api/opportunities", () => {
           {},
           { lostFromStage: null },
           { stage: "LOST", lostFromStage: "FOLLOW_UP" },
-          { stage: "LOST", lostFromStage: null },
+          { stage: "LOST", lostFromStage: "BUDGET_PRESENTATION" },
         ],
       });
     });
