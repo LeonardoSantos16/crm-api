@@ -1,7 +1,7 @@
 import { isFinalStage, type Stage } from "../domain/stages.ts";
 import { checkTransition } from "../domain/transitions.ts";
 import { AppError } from "../errors/app-error.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import type { LossReason, Prisma } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 import {
   opportunityDetailInclude,
@@ -26,8 +26,19 @@ export type MoveInput = {
     | undefined;
 };
 
+export type LoseInput = {
+  reason: LossReason;
+  detail?: string | undefined;
+};
+
 export const finalStageError = () =>
   new AppError(409, "FINAL_STAGE", "Opportunity is in a final stage");
+
+const loadDetail = (tx: Prisma.TransactionClient, id: number) =>
+  tx.opportunity.findUniqueOrThrow({
+    where: { id },
+    include: opportunityDetailInclude,
+  });
 
 export async function applyStageChange(
   tx: Prisma.TransactionClient,
@@ -135,10 +146,32 @@ export async function moveOpportunity(
           : { estimatedValue: complete.estimatedValue },
     });
 
-    return tx.opportunity.findUniqueOrThrow({
-      where: { id },
-      include: opportunityDetailInclude,
+    return loadDetail(tx, id);
+  });
+
+  return toOpportunityDetail(opportunity, now);
+}
+
+export async function loseOpportunity(
+  user: CurrentUser,
+  id: number,
+  { reason, detail }: LoseInput,
+  now: Date,
+) {
+  const opportunity = await prisma.$transaction(async (tx) => {
+    const current = await findVisibleOpportunity(user, id, tx);
+    if (isFinalStage(current.stage)) throw finalStageError();
+
+    await applyStageChange(tx, {
+      id,
+      fromStage: current.stage,
+      toStage: "LOST",
+      now,
+      userId: user.id,
+      data: { lossReason: reason, lossDetail: detail ?? null },
     });
+
+    return loadDetail(tx, id);
   });
 
   return toOpportunityDetail(opportunity, now);

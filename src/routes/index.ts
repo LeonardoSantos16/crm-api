@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getHealth } from "../controllers/health.controller.ts";
-import { postMove } from "../controllers/opportunities.controller.ts";
+import { postLose, postMove } from "../controllers/opportunities.controller.ts";
 import { getUsers } from "../controllers/users.controller.ts";
 import { requireUser } from "../middlewares/identity.ts";
 
@@ -17,3 +17,4 @@ const opportunities = Router();
 api.use("/opportunities", requireUser, opportunities);
 
 opportunities.post("/:id/move", postMove);
+opportunities.post("/:id/lose", postLose);
