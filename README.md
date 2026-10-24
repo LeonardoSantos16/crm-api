@@ -135,8 +135,8 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 - A identidade vem do header `X-User-Id`, e a visibilidade é aplicada na API:
   - o vendedor vê as próprias oportunidades;
   - o gestor vê as do time.
-- **Em produção:** o header seria substituído por um token validado pela API, como um JWT de um provedor de identidade ([ADR 0008](docs/adr/0008-identidade-sem-autenticacao.md)).
 - Credenciais ficam só no `.env`, que não é versionado.
+- **Em produção:** o case não exige autenticação completa, por isso a demonstração usa o header. Em produção, eu aplicaria autenticação com JWT: o usuário faz login num provedor de identidade, o front envia o token no header `Authorization: Bearer`, e a API valida a assinatura e a expiração em cada requisição, tirando do token o usuário e o papel que hoje vêm do `X-User-Id`. Junto disso, HTTPS, CORS restrito ao domínio do front, rate limiting e segredos num cofre, fora do `.env` ([ADR 0008](docs/adr/0008-identidade-sem-autenticacao.md)).
 
 ### Limitações conhecidas
 
