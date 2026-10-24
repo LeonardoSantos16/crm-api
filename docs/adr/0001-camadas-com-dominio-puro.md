@@ -15,13 +15,15 @@ Organizar a API em quatro camadas:
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `routes/`      | Definição das rotas                                                                                                                                          |
 | `controllers/` | HTTP e validação de entrada com zod. Sem regra de negócio.                                                                                                   |
-| `services/`    | Casos de uso: carregam dados, aplicam visibilidade por papel, chamam o domínio e abrem transações                                                            |
+| `use-cases/`   | Casos de uso: carregam dados, aplicam visibilidade por papel, chamam o domínio e abrem transações pela unit of work                                          |
 | `domain/`      | Regras de transição, movimentos permitidos, prazos e alerta, como **funções puras**: sem acesso a banco, sem ler o relógio, com `now` recebido por parâmetro |
+
+Os use cases acessam o banco por interfaces em `repositories/`, implementadas com Prisma em `repositories/prisma/`. O `container.ts` liga as implementações aos use cases e aos controllers.
 
 ## Alternativas consideradas
 
-- **DDD completo** (agregados, repositórios, eventos de domínio, value objects). Rejeitado: para este escopo, as camadas extras trariam cerimônia sem ganho de clareza. As regras já ficam isoladas e testáveis nas funções puras.
-- **Regras dentro dos services, junto do Prisma.** Rejeitado: os testes de transição e de alerta passariam a exigir banco, e os testes de fronteira de data ficariam lentos e frágeis.
+- **DDD completo** (agregados, eventos de domínio, value objects). Rejeitado: para este escopo, as camadas extras trariam cerimônia sem ganho de clareza. As regras já ficam isoladas e testáveis nas funções puras. Dos padrões do DDD, só os repositórios foram adotados, para testar os use cases sem banco.
+- **Regras dentro dos use cases, junto do Prisma.** Rejeitado: os testes de transição e de alerta passariam a exigir banco, e os testes de fronteira de data ficariam lentos e frágeis.
 
 ## Consequências
 

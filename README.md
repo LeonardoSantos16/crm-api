@@ -119,7 +119,8 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 
 ### Arquitetura
 
-- **Camadas:** `routes` → `controllers` (HTTP e zod) → `services` (casos de uso e transações) → `domain`.
+- **Camadas:** `routes` → `controllers` (HTTP e zod) → `use-cases` (casos de uso) → `domain`.
+- **Persistência atrás de interfaces:** os use cases dependem de `repositories` e de uma unit of work que abre a transação. A implementação com Prisma fica em `repositories/prisma`, e o `container.ts` monta as dependências. Assim os use cases são testados com repositórios mockados, sem banco.
 - **Domínio em funções puras**, com o "agora" recebido por parâmetro e testado sem banco. Sem DDD completo, por não trazer ganho neste escopo ([ADR 0001](docs/adr/0001-camadas-com-dominio-puro.md)).
 - **Erros** num formato único com `code`: 409 para conflito de estado, 422 para pré-requisito faltando ([ADR 0009](docs/adr/0009-contrato-de-erros.md)).
 - **Listagem** filtrada e ordenada no servidor ([ADR 0010](docs/adr/0010-listagem-filtrada-no-servidor.md)).
