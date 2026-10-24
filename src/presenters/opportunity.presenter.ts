@@ -10,6 +10,12 @@ import {
   toLocalDate,
 } from "../domain/dates.ts";
 import { getMoves, type TransitionSubject } from "../domain/transitions.ts";
+import type {
+  OpportunityCardDto,
+  OpportunityDetailDto,
+  OpportunitySummaryDto,
+  TimelineEntryDto,
+} from "../dtos/opportunity-response.dto.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import type {
   OpportunityCardRow,
@@ -44,7 +50,7 @@ function toTransitionSubject(
 function stageChangeEntry(
   opportunity: OpportunityDetailRow,
   change: OpportunityDetailRow["stageChanges"][number],
-) {
+): TimelineEntryDto {
   const base = { at: change.changedAt, author: change.changedBy };
   if (change.fromStage === null) {
     return { ...base, type: "CREATED" as const, stage: change.toStage };
@@ -66,7 +72,9 @@ function stageChangeEntry(
   };
 }
 
-function followUpEntry(followUp: OpportunityDetailRow["followUps"][number]) {
+function followUpEntry(
+  followUp: OpportunityDetailRow["followUps"][number],
+): TimelineEntryDto {
   return {
     type: "FOLLOW_UP" as const,
     at: followUp.createdAt,
@@ -77,7 +85,9 @@ function followUpEntry(followUp: OpportunityDetailRow["followUps"][number]) {
   };
 }
 
-function snoozeEntry(snooze: OpportunityDetailRow["snoozes"][number]) {
+function snoozeEntry(
+  snooze: OpportunityDetailRow["snoozes"][number],
+): TimelineEntryDto {
   return {
     type: "SNOOZE" as const,
     at: snooze.createdAt,
@@ -87,7 +97,9 @@ function snoozeEntry(snooze: OpportunityDetailRow["snoozes"][number]) {
   };
 }
 
-function commentEntry(comment: OpportunityDetailRow["comments"][number]) {
+function commentEntry(
+  comment: OpportunityDetailRow["comments"][number],
+): TimelineEntryDto {
   return {
     type: "COMMENT" as const,
     at: comment.createdAt,
@@ -107,7 +119,7 @@ function secondSnoozeSinceLastFollowUp(opportunity: OpportunityDetailRow) {
 function escalationEntries(
   opportunity: OpportunityDetailRow,
   alert: Alert | null,
-) {
+): TimelineEntryDto[] {
   if (alert?.state !== "ESCALATED") return [];
 
   const entry = { type: "ESCALATED" as const, author: null };
@@ -135,7 +147,10 @@ function escalationEntries(
   ];
 }
 
-function toTimeline(opportunity: OpportunityDetailRow, alert: Alert | null) {
+function toTimeline(
+  opportunity: OpportunityDetailRow,
+  alert: Alert | null,
+): TimelineEntryDto[] {
   return [
     ...escalationEntries(opportunity, alert),
     ...opportunity.comments.map(commentEntry),
@@ -147,7 +162,10 @@ function toTimeline(opportunity: OpportunityDetailRow, alert: Alert | null) {
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
-function toOpportunitySummary(opportunity: OpportunitySummaryRow, now: Date) {
+function toOpportunitySummary(
+  opportunity: OpportunitySummaryRow,
+  now: Date,
+): OpportunitySummaryDto {
   const alert = computeAlert(toAlertSubject(opportunity), now);
 
   return {
@@ -183,12 +201,15 @@ function toOpportunitySummary(opportunity: OpportunitySummaryRow, now: Date) {
 export function toOpportunityDetail(
   opportunity: OpportunityDetailRow,
   now: Date,
-) {
+): OpportunityDetailDto {
   const summary = toOpportunitySummary(opportunity, now);
   return { ...summary, timeline: toTimeline(opportunity, summary.alert) };
 }
 
-export function toOpportunityCard(opportunity: OpportunityCardRow, now: Date) {
+export function toOpportunityCard(
+  opportunity: OpportunityCardRow,
+  now: Date,
+): OpportunityCardDto {
   return {
     ...toOpportunitySummary(opportunity, now),
     lostFromStage: opportunity.stageChanges[0]?.fromStage ?? null,

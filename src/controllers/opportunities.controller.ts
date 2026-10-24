@@ -74,9 +74,11 @@ export async function postSnooze(req: Request<{ id: string }>, res: Response) {
 
 export async function postComment(req: Request<{ id: string }>, res: Response) {
   const id = parseOpportunityId(req.params.id);
-  const { body } = commentSchema.parse(req.body);
+  const input = commentSchema.parse(req.body);
 
-  res.json(await commentOpportunity(res.locals.user, id, body, res.locals.now));
+  res.json(
+    await commentOpportunity(res.locals.user, id, input, res.locals.now),
+  );
 }
 
 export async function getOpportunities(req: Request, res: Response) {
