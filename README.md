@@ -2,6 +2,8 @@
 
 API de CRM construída com Node.js, Express 5, Prisma 7 e PostgreSQL.
 
+A interface (Kanban, busca, filtros e detalhe) fica no repositório [`crm-dashboard`](https://github.com/LeonardoSantos16/crm-dashboard). Para ver o CRM completo, suba esta API com o seed e depois o front, seguindo o README dele.
+
 ## Pré-requisitos
 
 - [Node.js 24](https://nodejs.org/) (versão definida em `.nvmrc`)
@@ -25,7 +27,10 @@ API de CRM construída com Node.js, Express 5, Prisma 7 e PostgreSQL.
    NODE_ENV=development
    PORT=3333
    CORS_ORIGIN=http://localhost:3000
+   REFERENCE_DATE=2026-10-15
    ```
+
+   > `REFERENCE_DATE` fixa o "hoje" da API na data de referência do case (15/10/2026), para que os alertas do seed batam com os da [seção 3.6 das regras](docs/regras-de-negocio.md#36-exemplo-com-os-dados-do-case). Sem ela, vale o relógio real e os estados mudam ([ADR 0004](docs/adr/0004-tempo-e-datas.md)).
 
    > O `docker-compose.yml` exige `POSTGRES_USER` e `POSTGRES_PASSWORD`, por isso o `.env` precisa existir antes de subir o banco.
 
