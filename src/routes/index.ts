@@ -7,6 +7,7 @@ import {
   postFollowUp,
   postLose,
   postMove,
+  postOpportunity,
   postSnooze,
 } from "../controllers/opportunities.controller.ts";
 import { getUsers } from "../controllers/users.controller.ts";
@@ -25,6 +26,7 @@ const opportunities = Router();
 api.use("/opportunities", requireUser, opportunities);
 
 opportunities.get("/", getOpportunities);
+opportunities.post("/", postOpportunity);
 opportunities.get("/:id", getOpportunity);
 opportunities.post("/:id/move", postMove);
 opportunities.post("/:id/lose", postLose);

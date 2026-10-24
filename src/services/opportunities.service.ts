@@ -389,3 +389,69 @@ export async function listOpportunities(
     needsAttention: cards.filter((card) => needsAttention(card.alert)).length,
   };
 }
+
+export type CreateInput = {
+  companyName: string;
+  contactName: string;
+  contactPhone?: string | undefined;
+  contactEmail?: string | undefined;
+  ownerId?: number | undefined;
+  item?: ItemInput | undefined;
+  estimatedValue?: number | undefined;
+};
+
+async function resolveOwner(user: CurrentUser, ownerId: number | undefined) {
+  if (user.role === "MANAGER") {
+    if (ownerId === undefined) {
+      throw new AppError(
+        400,
+        "VALIDATION_ERROR",
+        "Managers must choose an owner from their team",
+        [{ path: ["ownerId"], message: "Required for managers" }],
+      );
+    }
+    await assertTeamMember(user, ownerId);
+    return ownerId;
+  }
+  if (ownerId === undefined || ownerId === user.id) return user.id;
+  throw new AppError(
+    403,
+    "FORBIDDEN",
+    "Sellers can only create opportunities for themselves",
+  );
+}
+
+export async function createOpportunity(
+  user: CurrentUser,
+  { companyName, ownerId, item, ...data }: CreateInput,
+  now: Date,
+) {
+  const owner = await resolveOwner(user, ownerId);
+  const opportunity = await prisma.$transaction(async (tx) => {
+    const company =
+      (await tx.company.findFirst({
+        where: { name: { equals: companyName, mode: "insensitive" } },
+      })) ?? (await tx.company.create({ data: { name: companyName } }));
+    const { id } = await tx.opportunity.create({
+      data: {
+        ...data,
+        companyId: company.id,
+        ownerId: owner,
+        stage: "FIRST_CONTACT",
+        stageEnteredAt: now,
+        items: item ? { create: [item] } : {},
+        stageChanges: {
+          create: {
+            fromStage: null,
+            toStage: "FIRST_CONTACT",
+            changedAt: now,
+            changedById: user.id,
+          },
+        },
+      },
+    });
+    return loadDetail(tx, id);
+  });
+
+  return toOpportunityDetail(opportunity, now);
+}

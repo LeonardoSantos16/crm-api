@@ -11,6 +11,7 @@ import { FUNNEL_STAGES } from "../domain/stages.ts";
 import { FollowUpChannel, LossReason } from "../generated/prisma/client.ts";
 import {
   commentOpportunity,
+  createOpportunity,
   followUpOpportunity,
   getOpportunityDetail,
   listOpportunities,
@@ -103,6 +104,18 @@ const listSchema = z.object({
   includeLost: booleanParam,
 });
 
+const requiredName = z.string().trim().min(1).max(200);
+
+const createSchema = z.object({
+  companyName: requiredName,
+  contactName: requiredName,
+  contactPhone: z.string().trim().max(30).optional(),
+  contactEmail: z.string().trim().pipe(z.email()).optional(),
+  ownerId: z.int().positive().optional(),
+  item: itemSchema.optional(),
+  estimatedValue: z.number().positive().optional(),
+});
+
 function parseOpportunityId(value: string) {
   if (!POSITIVE_INTEGER.test(value)) throw opportunityNotFound();
   return Number(value);
@@ -161,4 +174,12 @@ export async function getOpportunities(req: Request, res: Response) {
   const query = listSchema.parse(req.query);
 
   res.json(await listOpportunities(res.locals.user, query, res.locals.now));
+}
+
+export async function postOpportunity(req: Request, res: Response) {
+  const input = createSchema.parse(req.body);
+
+  res
+    .status(201)
+    .json(await createOpportunity(res.locals.user, input, res.locals.now));
 }
