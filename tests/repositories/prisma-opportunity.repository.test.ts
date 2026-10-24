@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { CurrentUser } from "../../src/types/user.types.ts";
 import { prisma } from "../../src/lib/prisma.ts";
-import {
-  findVisibleOpportunity,
-  visibleOpportunitiesWhere,
-} from "../../src/services/visibility.ts";
+import { PrismaOpportunityRepository } from "../../src/repositories/prisma/prisma-opportunity.repository.ts";
 import { resetDatabase } from "../helpers/database.ts";
 import { createOpportunity, createUser } from "../helpers/factories.ts";
+
+const opportunities = new PrismaOpportunityRepository(prisma);
 
 async function createTeams() {
   const marcos = await createUser({ name: "Marcos", role: "MANAGER" });
@@ -23,20 +23,18 @@ async function createTeams() {
   };
 }
 
-const visibleIds = async (
-  where: ReturnType<typeof visibleOpportunitiesWhere>,
-) =>
-  (await prisma.opportunity.findMany({ where, orderBy: { id: "asc" } })).map(
-    (opportunity) => opportunity.id,
-  );
+const visibleIds = async (user: CurrentUser) =>
+  (await opportunities.findVisibleCards(user, { includeLost: true }))
+    .map((opportunity) => opportunity.id)
+    .sort((a, b) => a - b);
 
-describe("findVisibleOpportunity", () => {
+describe("findVisible", () => {
   beforeEach(resetDatabase);
 
   it("finds the seller's own opportunity", async () => {
     const { ana, anaOpportunity } = await createTeams();
 
-    expect((await findVisibleOpportunity(ana, anaOpportunity.id)).id).toBe(
+    expect((await opportunities.findVisible(ana, anaOpportunity.id))?.id).toBe(
       anaOpportunity.id,
     );
   });
@@ -44,44 +42,37 @@ describe("findVisibleOpportunity", () => {
   it("hides another seller's opportunity as if it did not exist", async () => {
     const { ana, brunoOpportunity } = await createTeams();
 
-    const hidden = await findVisibleOpportunity(ana, brunoOpportunity.id).catch(
-      (error: unknown) => error,
-    );
-    const missing = await findVisibleOpportunity(ana, 999_999).catch(
-      (error: unknown) => error,
-    );
-
-    expect(hidden).toMatchObject({ status: 404, code: "NOT_FOUND" });
-    expect(hidden).toEqual(missing);
+    expect(
+      await opportunities.findVisible(ana, brunoOpportunity.id),
+    ).toBeNull();
+    expect(await opportunities.findVisible(ana, 999_999)).toBeNull();
   });
 
   it("lets the manager find the team's opportunities only", async () => {
     const { marcos, anaOpportunity, carlaOpportunity } = await createTeams();
 
-    expect((await findVisibleOpportunity(marcos, anaOpportunity.id)).id).toBe(
-      anaOpportunity.id,
-    );
-    await expect(
-      findVisibleOpportunity(marcos, carlaOpportunity.id),
-    ).rejects.toMatchObject({ status: 404, code: "NOT_FOUND" });
+    expect(
+      (await opportunities.findVisible(marcos, anaOpportunity.id))?.id,
+    ).toBe(anaOpportunity.id);
+    expect(
+      await opportunities.findVisible(marcos, carlaOpportunity.id),
+    ).toBeNull();
   });
 });
 
-describe("visibleOpportunitiesWhere", () => {
+describe("findVisibleCards", () => {
   beforeEach(resetDatabase);
 
   it("limits the seller to their own opportunities", async () => {
     const { ana, anaOpportunity } = await createTeams();
 
-    expect(await visibleIds(visibleOpportunitiesWhere(ana))).toEqual([
-      anaOpportunity.id,
-    ]);
+    expect(await visibleIds(ana)).toEqual([anaOpportunity.id]);
   });
 
   it("limits the manager to the team's opportunities", async () => {
     const { marcos, anaOpportunity, brunoOpportunity } = await createTeams();
 
-    expect(await visibleIds(visibleOpportunitiesWhere(marcos))).toEqual([
+    expect(await visibleIds(marcos)).toEqual([
       anaOpportunity.id,
       brunoOpportunity.id,
     ]);

@@ -1,9 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import { AppError } from "../errors/app-error.ts";
-import {
-  findCurrentUser,
-  type CurrentUser,
-} from "../services/users.service.ts";
+import { parsePositiveInteger } from "../lib/positive-integer.ts";
+import type { CurrentUser } from "../types/user.types.ts";
+import type { IdentifyUserUseCase } from "../use-cases/users/identify-user.use-case.ts";
 
 declare module "express-serve-static-core" {
   interface Locals {
@@ -11,26 +9,10 @@ declare module "express-serve-static-core" {
   }
 }
 
-const POSITIVE_INTEGER = /^[1-9]\d*$/;
-
-const unauthenticated = () =>
-  new AppError(
-    401,
-    "UNAUTHENTICATED",
-    "X-User-Id header must identify an existing user",
-  );
-
-export async function requireUser(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  const header = req.get("X-User-Id");
-  if (!header || !POSITIVE_INTEGER.test(header)) throw unauthenticated();
-
-  const user = await findCurrentUser(Number(header));
-  if (!user) throw unauthenticated();
-
-  res.locals.user = user;
-  next();
+export function requireUser(identifyUser: IdentifyUserUseCase) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const id = parsePositiveInteger(req.get("X-User-Id"));
+    res.locals.user = await identifyUser.execute(id);
+    next();
+  };
 }

@@ -1,4 +1,4 @@
-export class AppError extends Error {
+export abstract class AppError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details?: unknown;
@@ -10,7 +10,7 @@ export class AppError extends Error {
     details?: unknown,
   ) {
     super(message);
-    this.name = "AppError";
+    this.name = new.target.name;
     this.status = status;
     this.code = code;
     this.details = details;

@@ -1,37 +1,42 @@
-import { Router } from "express";
-import { getHealth } from "../controllers/health.controller.ts";
-import {
-  getOpportunities,
-  getOpportunity,
-  patchOpportunity,
-  postComment,
-  postFollowUp,
-  postLose,
-  postMove,
-  postOpportunity,
-  postSnooze,
-} from "../controllers/opportunities.controller.ts";
-import { getUsers } from "../controllers/users.controller.ts";
-import { requireUser } from "../middlewares/identity.ts";
+import { Router, type RequestHandler } from "express";
+import type { HealthController } from "../controllers/health.controller.ts";
+import type { OpportunitiesController } from "../controllers/opportunities.controller.ts";
+import type { UsersController } from "../controllers/users.controller.ts";
 
-export const routes = Router();
+export type RouteHandlers = {
+  health: HealthController;
+  users: UsersController;
+  opportunities: OpportunitiesController;
+  requireUser: RequestHandler;
+};
 
-routes.get("/health", getHealth);
+export function createRoutes({
+  health,
+  users,
+  opportunities,
+  requireUser,
+}: RouteHandlers) {
+  const routes = Router();
 
-const api = Router();
-routes.use("/api", api);
+  routes.get("/health", health.get);
 
-api.get("/users", getUsers);
+  const api = Router();
+  routes.use("/api", api);
 
-const opportunities = Router();
-api.use("/opportunities", requireUser, opportunities);
+  api.get("/users", users.list);
 
-opportunities.get("/", getOpportunities);
-opportunities.post("/", postOpportunity);
-opportunities.get("/:id", getOpportunity);
-opportunities.patch("/:id", patchOpportunity);
-opportunities.post("/:id/move", postMove);
-opportunities.post("/:id/lose", postLose);
-opportunities.post("/:id/follow-up", postFollowUp);
-opportunities.post("/:id/snooze", postSnooze);
-opportunities.post("/:id/comments", postComment);
+  const opportunityRoutes = Router();
+  api.use("/opportunities", requireUser, opportunityRoutes);
+
+  opportunityRoutes.get("/", opportunities.list);
+  opportunityRoutes.post("/", opportunities.create);
+  opportunityRoutes.get("/:id", opportunities.getDetail);
+  opportunityRoutes.patch("/:id", opportunities.update);
+  opportunityRoutes.post("/:id/move", opportunities.move);
+  opportunityRoutes.post("/:id/lose", opportunities.lose);
+  opportunityRoutes.post("/:id/follow-up", opportunities.followUp);
+  opportunityRoutes.post("/:id/snooze", opportunities.snooze);
+  opportunityRoutes.post("/:id/comments", opportunities.comment);
+
+  return routes;
+}

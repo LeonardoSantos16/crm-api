@@ -1,25 +1,25 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../errors/app-error.ts";
+import {
+  InternalError,
+  InvalidJsonError,
+  ValidationError,
+} from "../errors/http-errors.ts";
 
 function toAppError(err: unknown): AppError {
   if (err instanceof AppError) return err;
 
   if (err instanceof ZodError) {
-    return new AppError(
-      400,
-      "VALIDATION_ERROR",
-      "Invalid request data",
-      err.issues,
-    );
+    return new ValidationError("Invalid request data", err.issues);
   }
 
   if (err instanceof SyntaxError && "body" in err) {
-    return new AppError(400, "INVALID_JSON", "Malformed JSON body");
+    return new InvalidJsonError();
   }
 
   console.error(err);
-  return new AppError(500, "INTERNAL_ERROR", "Internal server error");
+  return new InternalError();
 }
 
 export function errorHandler(

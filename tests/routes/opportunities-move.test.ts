@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.ts";
 import type { Prisma, User } from "../../src/generated/prisma/client.ts";
 import { prisma } from "../../src/lib/prisma.ts";
-import { applyStageChange } from "../../src/services/opportunities.service.ts";
+import { PrismaUnitOfWork } from "../../src/repositories/prisma/prisma-unit-of-work.ts";
 import { resetDatabase } from "../helpers/database.ts";
 import { createOpportunity, createUser } from "../helpers/factories.ts";
 
@@ -317,7 +317,7 @@ describe("POST /api/opportunities/:id/move", () => {
   });
 });
 
-describe("applyStageChange", () => {
+describe("changeStage", () => {
   beforeEach(async () => {
     await resetDatabase();
     manager = await createUser({ name: "Marcos", role: "MANAGER" });
@@ -327,13 +327,13 @@ describe("applyStageChange", () => {
   it("responds 409 STAGE_CONFLICT when the stage changed meanwhile", async () => {
     const { id } = await opportunityOf(ana, { stage: "FOLLOW_UP" });
 
-    const result = prisma.$transaction((tx) =>
-      applyStageChange(tx, {
-        id,
+    const result = new PrismaUnitOfWork(prisma).run(({ opportunities }) =>
+      opportunities.changeStage({
+        opportunityId: id,
         fromStage: "BUDGET_PRESENTATION",
         toStage: "FOLLOW_UP",
-        now,
         userId: ana.id,
+        at: now,
       }),
     );
 

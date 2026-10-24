@@ -1,15 +1,22 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
+import { prisma } from "../../src/lib/prisma.ts";
 import { errorHandler } from "../../src/middlewares/error-handler.ts";
 import { requireUser } from "../../src/middlewares/identity.ts";
+import { PrismaUserRepository } from "../../src/repositories/prisma/prisma-user.repository.ts";
+import { IdentifyUserUseCase } from "../../src/use-cases/users/identify-user.use-case.ts";
 import { resetDatabase } from "../helpers/database.ts";
 import { createUser } from "../helpers/factories.ts";
 
 const app = express();
-app.get("/me", requireUser, (_req, res) => {
-  res.json(res.locals.user);
-});
+app.get(
+  "/me",
+  requireUser(new IdentifyUserUseCase(new PrismaUserRepository(prisma))),
+  (_req, res) => {
+    res.json(res.locals.user);
+  },
+);
 app.use(errorHandler);
 
 const unauthenticated = {
