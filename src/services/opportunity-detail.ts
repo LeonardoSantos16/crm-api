@@ -1,5 +1,14 @@
-import { computeAlert, type AlertSubject } from "../domain/alert.ts";
-import { fromDbDate } from "../domain/dates.ts";
+import {
+  computeAlert,
+  type Alert,
+  type AlertSubject,
+} from "../domain/alert.ts";
+import {
+  addDays,
+  fromDbDate,
+  startOfLocalDay,
+  toLocalDate,
+} from "../domain/dates.ts";
 import { getMoves, type TransitionSubject } from "../domain/transitions.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 
@@ -112,8 +121,51 @@ function commentEntry(comment: OpportunityWithRelations["comments"][number]) {
   };
 }
 
-function toTimeline(opportunity: OpportunityWithRelations) {
+function secondSnoozeSinceLastFollowUp(opportunity: OpportunityWithRelations) {
+  const lastFollowUpAt = opportunity.followUps[0]?.createdAt;
+  const snoozesSince = opportunity.snoozes.filter(
+    (snooze) => !lastFollowUpAt || snooze.createdAt > lastFollowUpAt,
+  );
+  return snoozesSince.at(-2);
+}
+
+function escalationEntries(
+  opportunity: OpportunityWithRelations,
+  alert: Alert | null,
+) {
+  if (alert?.state !== "ESCALATED") return [];
+
+  const entry = { type: "ESCALATED" as const, author: null };
+  if (opportunity.snoozeCount >= 2) {
+    const secondSnooze = secondSnoozeSinceLastFollowUp(opportunity);
+    if (!secondSnooze) return [];
+    return [
+      {
+        ...entry,
+        at: secondSnooze.createdAt,
+        date: toLocalDate(secondSnooze.createdAt),
+        cause: "SNOOZES" as const,
+      },
+    ];
+  }
+
+  const date = addDays(alert.dueDate, alert.deadlineDays + 1);
   return [
+    {
+      ...entry,
+      at: startOfLocalDay(date),
+      date,
+      cause: "DEADLINE" as const,
+    },
+  ];
+}
+
+function toTimeline(
+  opportunity: OpportunityWithRelations,
+  alert: Alert | null,
+) {
+  return [
+    ...escalationEntries(opportunity, alert),
     ...opportunity.comments.map(commentEntry),
     ...opportunity.snoozes.map(snoozeEntry),
     ...opportunity.followUps.map(followUpEntry),
@@ -127,6 +179,8 @@ export function toOpportunityDetail(
   opportunity: OpportunityWithRelations,
   now: Date,
 ) {
+  const alert = computeAlert(toAlertSubject(opportunity), now);
+
   return {
     id: opportunity.id,
     code: `OPP-${opportunity.id}`,
@@ -152,8 +206,8 @@ export function toOpportunityDetail(
     snoozeCount: opportunity.snoozeCount,
     lossReason: opportunity.lossReason,
     lossDetail: opportunity.lossDetail,
-    alert: computeAlert(toAlertSubject(opportunity), now),
+    alert,
     moves: getMoves(toTransitionSubject(opportunity)),
-    timeline: toTimeline(opportunity),
+    timeline: toTimeline(opportunity, alert),
   };
 }
