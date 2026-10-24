@@ -197,5 +197,8 @@ Toda ação grava um registro no histórico da oportunidade, com data e autor.
 
 - Oportunidades OPP-2001 a OPP-2007 do case; vendedores Ana, Bruno e Carla; gestor Marcos.
 - O case não informa a data de entrada na etapa. O seed usa a data do último contato. Como o relógio conta a partir do evento mais recente entre os dois, o resultado é o mesmo.
+- O case não informa horários. Os eventos do seed ficam às 00:00 de São Paulo, para que qualquer ação feita no próprio dia apareça depois deles na linha do tempo.
 - Contatos ficam vazios, porque o case não os informa.
+- Cada oportunidade tem um único item, com o brinde e a quantidade do case. O valor unitário é o valor estimado dividido pela quantidade (OPP-2004: R$ 3.900 ÷ 80 = R$ 48,75).
 - OPP-2007 (Perdida) recebe o motivo "Outro", com o detalhe "Motivo não informado nos dados do case". Inventar um motivo seria fabricar dado.
+- O case também não informa de que etapa a OPP-2007 saiu. O seed assume Apresentação de Orçamento, porque ela tem validade de proposta, o que indica que uma proposta foi apresentada. Sem essa origem, o quadro não saberia em que coluna mostrá-la com "Mostrar perdidas".
