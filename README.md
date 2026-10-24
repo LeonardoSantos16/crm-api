@@ -2,6 +2,8 @@
 
 API de CRM construída com Node.js, Express 5, Prisma 7 e PostgreSQL.
 
+A interface (Kanban, busca, filtros e detalhe) fica no repositório [`crm-dashboard`](https://github.com/LeonardoSantos16/crm-dashboard). Para ver o CRM completo, suba esta API com o seed e depois o front, seguindo o README dele.
+
 ## Pré-requisitos
 
 - [Node.js 24](https://nodejs.org/) (versão definida em `.nvmrc`)
@@ -25,7 +27,10 @@ API de CRM construída com Node.js, Express 5, Prisma 7 e PostgreSQL.
    NODE_ENV=development
    PORT=3333
    CORS_ORIGIN=http://localhost:3000
+   REFERENCE_DATE=2026-10-15
    ```
+
+   > `REFERENCE_DATE` fixa o "hoje" da API na data de referência do case (15/10/2026), para que os alertas do seed batam com os da [seção 3.6 das regras](docs/regras-de-negocio.md#36-exemplo-com-os-dados-do-case). Sem ela, vale o relógio real e os estados mudam ([ADR 0004](docs/adr/0004-tempo-e-datas.md)).
 
    > O `docker-compose.yml` exige `POSTGRES_USER` e `POSTGRES_PASSWORD`, por isso o `.env` precisa existir antes de subir o banco.
 
@@ -119,7 +124,8 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 
 ### Arquitetura
 
-- **Camadas:** `routes` → `controllers` (HTTP e zod) → `services` (casos de uso e transações) → `domain`.
+- **Camadas:** `routes` → `controllers` (HTTP e zod) → `use-cases` (casos de uso) → `domain`.
+- **Persistência atrás de interfaces:** os use cases dependem de `repositories` e de uma unit of work que abre a transação. A implementação com Prisma fica em `repositories/prisma`, e o `container.ts` monta as dependências. Assim os use cases são testados com repositórios mockados, sem banco.
 - **Domínio em funções puras**, com o "agora" recebido por parâmetro e testado sem banco. Sem DDD completo, por não trazer ganho neste escopo ([ADR 0001](docs/adr/0001-camadas-com-dominio-puro.md)).
 - **Erros** num formato único com `code`: 409 para conflito de estado, 422 para pré-requisito faltando ([ADR 0009](docs/adr/0009-contrato-de-erros.md)).
 - **Listagem** filtrada e ordenada no servidor ([ADR 0010](docs/adr/0010-listagem-filtrada-no-servidor.md)).
@@ -129,8 +135,8 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 - A identidade vem do header `X-User-Id`, e a visibilidade é aplicada na API:
   - o vendedor vê as próprias oportunidades;
   - o gestor vê as do time.
-- **Em produção:** o header seria substituído por um token validado pela API, como um JWT de um provedor de identidade ([ADR 0008](docs/adr/0008-identidade-sem-autenticacao.md)).
 - Credenciais ficam só no `.env`, que não é versionado.
+- **Em produção:** o case não exige autenticação completa, por isso a demonstração usa o header. Em produção, eu aplicaria autenticação com JWT: o usuário faz login num provedor de identidade, o front envia o token no header `Authorization: Bearer`, e a API valida a assinatura e a expiração em cada requisição, tirando do token o usuário e o papel que hoje vêm do `X-User-Id`. Junto disso, HTTPS, CORS restrito ao domínio do front, rate limiting e segredos num cofre, fora do `.env` ([ADR 0008](docs/adr/0008-identidade-sem-autenticacao.md)).
 
 ### Limitações conhecidas
 
@@ -140,3 +146,45 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 - **Escalonamento** sem notificação nem worker. É a próxima etapa, prevista no front.
 - **Retorno sem contato:** um retorno pode ser marcado sem ter acontecido. A data no histórico torna o padrão visível.
 - **Dados do seed:** o case não informa a data de entrada na etapa (o seed usa a do último contato) nem o motivo da perda da OPP-2007 (registrado como "Outro").
+
+## Os outros três problemas
+
+O problema 4 foi implementado (seção [Automação](#automação-alerta-de-retorno-problema-4)). Para os outros três, esta é a solução que eu seguiria.
+
+### 1. Lead esperando o primeiro contato
+
+**Ideia:** responder o lead na hora, automaticamente, e manter o vendedor cobrado pelo contato real.
+
+- **E-mail automático no cadastro:** ao criar a oportunidade, a API grava na mesma transação um envio pendente numa tabela de saída (outbox). Um worker envia em segundos um e-mail de boas-vindas, com uma apresentação da Nobre Brindes e o aviso de que um vendedor vai entrar em contato. Se o envio falhar, ele é tentado de novo.
+- **Job de hora em hora:** reprocessa os envios que falharam e encontra leads em Primeiro Contato que ficaram sem e-mail.
+- **O e-mail não substitui o contato:** a oportunidade continua em Primeiro Contato, e o prazo de 1 dia do alerta de retorno segue valendo. Se ninguém ligar, ela aparece como atrasada e depois escala para o gestor.
+
+### 2. Conhecer a empresa do lead
+
+**Ideia:** preencher automaticamente os dados da empresa a partir do CNPJ, para que o vendedor chegue à ligação sabendo com quem fala.
+
+- **Consulta pelo CNPJ:** a empresa ganha um campo `cnpj`, opcional e único. Ao informá-lo, um worker consulta uma API pública da Receita Federal (como a BrasilAPI) e salva razão social, nome fantasia, atividade principal (CNAE), porte, data de abertura, endereço e situação cadastral.
+- **Uso no atendimento:** o detalhe da oportunidade ganha um bloco "Sobre a empresa". A atividade ajuda a sugerir o tipo de brinde, e o porte indica o volume provável do pedido.
+- **Sem travar o cadastro:** a consulta roda em segundo plano, com nova tentativa se a API externa falhar. Os dados ficam salvos na empresa e só são consultados de novo quando estiverem antigos.
+- **Menos duplicatas:** com o CNPJ, a empresa passa a ser identificada por ele, e não pelo nome.
+- **LGPD:** só os dados da empresa são guardados. O quadro de sócios, que traz pessoas físicas, fica de fora.
+
+### 3. Informações do roteiro da ligação
+
+**Ideia:** transcrever a ligação com IA e extrair dela as respostas do roteiro, para que fiquem registradas na oportunidade sem o vendedor digitar.
+
+- **Gravação e transcrição:** a ligação feita pela telefonia VoIP é gravada, com aviso ao cliente no início. Ao terminar, um worker envia o áudio a um serviço de transcrição (speech-to-text) e salva o texto na oportunidade.
+- **Extração do roteiro:** um LLM lê a transcrição e preenche os campos do roteiro de forma estruturada: brinde de interesse, quantidade, data do evento, orçamento, quem decide e próximos passos. A saída é validada com zod, como qualquer entrada da API.
+- **O vendedor confirma:** os campos extraídos aparecem como sugestão no registro do retorno (o `FollowUp`, que já tem canal e resumo). Só depois de o vendedor revisar é que eles atualizam a oportunidade. A IA pode errar, e um valor ou quantidade errados afetariam as regras do funil.
+- **Consulta depois da ligação:** o resumo entra na linha do tempo, e a transcrição completa fica disponível no detalhe, com busca por texto.
+- **LGPD:** a gravação exige o aviso ao cliente, e o áudio é apagado depois de um prazo definido. Fica guardado só o texto.
+
+## Uso de IA
+
+A API foi desenvolvida com o Claude Code:
+
+- **Definição das regras:** as regras de transição e do alerta foram fechadas em rodadas de perguntas e respostas (skill `grilling`), antes do código. O resultado está em [docs/regras-de-negocio.md](docs/regras-de-negocio.md) e nos ADRs.
+- **TDD:** a implementação seguiu um plano de etapas, com a skill `tdd`. Em cada etapa, os casos de teste foram listados e aprovados por mim antes do ciclo red → green → refactor. Os commits seguem o par `test:` / `feat:`.
+- **Prisma 7:** as skills oficiais do Prisma (`.claude/skills/prisma-*`) serviram de referência para a configuração do client, do adapter `pg` e das migrations.
+- **Commits e PRs:** mensagens de commit e textos de PR escritos com auxílio do Claude Code.
+- **Implementação:** as decisões de regras de negócio e de arquitetura são minhas. Em um fluxo padrão, eu seguiria TDD: os testes seriam gerados pela IA, com os stubs revisados por mim, e a implementação da etapa Green seria feita manualmente. Por falta de tempo, devido a motivos pessoais, acabei usando a IA também em grande parte da implementação, com a revisão do código concentrada principalmente nos PRs. Como esse código inicial não seguia um padrão estrutural, é possível notar verbosidade e alto acoplamento no PR https://github.com/LeonardoSantos16/crm-api/pull/10, no qual, após finalizar o back-end e o front-end, refatorei todo o código, separando-o em camadas e aplicando os princípios SOLID para deixá-lo no meu padrão.
