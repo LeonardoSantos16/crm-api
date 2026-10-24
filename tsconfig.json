@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2024",
-    "module": "preserve",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -12,14 +11,14 @@
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
   "include": [
     "src",
     "tests",
     "prisma",
-    "prisma.config.ts"
+    "prisma.config.ts",
+    "eslint.config.ts",
+    "vitest.config.ts"
   ]
 }

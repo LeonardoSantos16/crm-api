@@ -1,0 +1,6 @@
+src/generated
+coverage
+dist
+package-lock.json
+.claude
+skills-lock.json

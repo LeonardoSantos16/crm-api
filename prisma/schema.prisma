@@ -1,0 +1,100 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SELLER
+  MANAGER
+}
+
+enum OpportunityStage {
+  FIRST_CONTACT
+  BUDGET_PRESENTATION
+  FOLLOW_UP
+  FORECAST
+  CLOSING
+  LOST
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      UserRole @default(SELLER)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  managerId Int?
+  manager   User?  @relation("Team", fields: [managerId], references: [id])
+  team      User[] @relation("Team")
+
+  opportunities Opportunity[]
+  stageChanges  StageChange[]
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  opportunities Opportunity[]
+}
+
+// O código exibido (OPP-2001) é derivado do id
+model Opportunity {
+  id                 Int              @id @default(autoincrement())
+  estimatedValue     Decimal?         @db.Decimal(12, 2)
+  lastContactAt      DateTime?        @db.Timestamptz
+  proposalValidUntil DateTime?        @db.Date
+  eventDate          DateTime?        @db.Date
+  stage              OpportunityStage @default(FIRST_CONTACT)
+  stageEnteredAt     DateTime         @default(now()) @db.Timestamptz
+  lossReason         String?
+  createdAt          DateTime         @default(now()) @db.Timestamptz
+  updatedAt          DateTime         @updatedAt @db.Timestamptz
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+  ownerId   Int
+  owner     User    @relation(fields: [ownerId], references: [id])
+
+  items        OpportunityItem[]
+  stageChanges StageChange[]
+
+  @@index([ownerId, stage])
+  @@index([companyId])
+}
+
+model OpportunityItem {
+  id          Int      @id @default(autoincrement())
+  description String
+  quantity    Int
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+model StageChange {
+  id        Int               @id @default(autoincrement())
+  fromStage OpportunityStage?
+  toStage   OpportunityStage
+  changedAt DateTime          @default(now()) @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedById   Int?
+  changedBy     User?       @relation(fields: [changedById], references: [id])
+
+  @@index([opportunityId, changedAt])
+}
