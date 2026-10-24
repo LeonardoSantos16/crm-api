@@ -1,16 +1,14 @@
-import {
-  diffDays,
-  toDbDate,
-  toLocalDate,
-  type CalendarDate,
-} from "../domain/dates.ts";
+import { buildBoard, type BoardFilter } from "../domain/board.ts";
+import { toDbDate, type CalendarDate } from "../domain/dates.ts";
 import { isFinalStage, type Stage } from "../domain/stages.ts";
+import { checkTransition, missingValueOrItems } from "../domain/transitions.ts";
+import { ForbiddenError, ValidationError } from "../errors/http-errors.ts";
 import {
-  checkTransition,
-  missingValueOrItems,
-  type MissingField,
-} from "../domain/transitions.ts";
-import { AppError } from "../errors/app-error.ts";
+  FinalStageError,
+  InvalidTransitionError,
+  MissingValueOrItemsError,
+  StageConflictError,
+} from "../errors/opportunity-errors.ts";
 import type {
   FollowUpChannel,
   LossReason,
@@ -18,13 +16,6 @@ import type {
   Prisma,
 } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
-import { needsAttention, type AlertState } from "../domain/alert.ts";
-import {
-  byMostRecent,
-  byPriority,
-  byValue,
-  type Rankable,
-} from "../domain/priority.ts";
 import {
   opportunityCardInclude,
   opportunityDetailInclude,
@@ -69,17 +60,6 @@ export type SnoozeInput = {
   until: CalendarDate;
   reason?: string | undefined;
 };
-
-const missingValueOrItemsError = (missing: MissingField[]) =>
-  new AppError(
-    422,
-    "MISSING_VALUE_OR_ITEMS",
-    "Estimated value and at least one item are required",
-    { missing },
-  );
-
-export const finalStageError = () =>
-  new AppError(409, "FINAL_STAGE", "Opportunity is in a final stage");
 
 const loadDetail = (tx: Prisma.TransactionClient, id: number) =>
   tx.opportunity.findUniqueOrThrow({
@@ -138,11 +118,7 @@ export async function applyStageChange(
     },
   });
   if (count === 0) {
-    throw new AppError(
-      409,
-      "STAGE_CONFLICT",
-      "Opportunity stage changed during the request",
-    );
+    throw new StageConflictError();
   }
 
   await tx.stageChange.create({
@@ -183,7 +159,7 @@ function actOnOpenOpportunity(
   action: OpportunityAction,
 ) {
   return actOnOpportunity(user, id, now, async (tx, current) => {
-    if (isFinalStage(current.stage)) throw finalStageError();
+    if (isFinalStage(current.stage)) throw new FinalStageError();
     await action(tx, current);
   });
 }
@@ -208,15 +184,8 @@ export function moveOpportunity(
       },
       toStage,
     );
-    if (!result.allowed) {
-      throw new AppError(
-        409,
-        "INVALID_TRANSITION",
-        "Stage transition not allowed",
-        { reason: result.reason },
-      );
-    }
-    if (result.missing) throw missingValueOrItemsError(result.missing);
+    if (!result.allowed) throw new InvalidTransitionError(result.reason);
+    if (result.missing) throw new MissingValueOrItemsError(result.missing);
 
     if (complete?.items) await replaceItems(tx, id, complete.items);
 
@@ -332,44 +301,14 @@ export function commentOpportunity(
   });
 }
 
-export type ListQuery = {
-  q?: string | undefined;
-  situation?: AlertState[] | undefined;
+export type ListQuery = BoardFilter & {
   ownerId?: number | undefined;
-  sort?: "priority" | "value" | undefined;
-  allClosed?: boolean | undefined;
   includeLost?: boolean | undefined;
 };
 
-const RECENT_FINAL_DAYS = 30;
-
-type BoardCard = Rankable & { stage: Stage };
-
-const boardGroup = (card: BoardCard) =>
-  card.stage === "CLOSING" ? 1 : card.stage === "LOST" ? 2 : 0;
-
-function byBoardPriority(a: BoardCard, b: BoardCard) {
-  const group = boardGroup(a) - boardGroup(b);
-  if (group !== 0) return group;
-  return boardGroup(a) === 0 ? byPriority(a, b) : byMostRecent(a, b);
-}
-
-const normalizeText = (value: string) =>
-  value
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-
 export async function listOpportunities(
   user: CurrentUser,
-  {
-    q,
-    situation,
-    ownerId,
-    sort = "priority",
-    allClosed = false,
-    includeLost = false,
-  }: ListQuery,
+  { ownerId, includeLost = false, ...filter }: ListQuery,
   now: Date,
 ) {
   if (ownerId !== undefined) await assertTeamMember(user, ownerId);
@@ -384,32 +323,7 @@ export async function listOpportunities(
   });
   const cards = rows.map((row) => toOpportunityCard(row, now));
 
-  const today = toLocalDate(now);
-  const isRecent = (enteredAt: Date) =>
-    diffDays(toLocalDate(enteredAt), today) <= RECENT_FINAL_DAYS;
-  const search = q ? normalizeText(q) : undefined;
-  const isListed = (card: (typeof cards)[number]) => {
-    if (card.stage === "CLOSING") {
-      return allClosed || isRecent(card.stageEnteredAt);
-    }
-    if (card.stage === "LOST") return isRecent(card.stageEnteredAt);
-    return true;
-  };
-  const matchesSearch = (card: (typeof cards)[number]) =>
-    !search ||
-    normalizeText(card.code).includes(search) ||
-    normalizeText(card.company.name).includes(search);
-  const matchesSituation = (card: (typeof cards)[number]) =>
-    !situation || (card.alert !== null && situation.includes(card.alert.state));
-
-  const matching = cards.filter(
-    (card) => isListed(card) && matchesSearch(card) && matchesSituation(card),
-  );
-
-  return {
-    opportunities: matching.sort(sort === "value" ? byValue : byBoardPriority),
-    needsAttention: cards.filter((card) => needsAttention(card.alert)).length,
-  };
+  return buildBoard(cards, filter, now);
 }
 
 export type CreateInput = {
@@ -425,9 +339,7 @@ export type CreateInput = {
 async function resolveOwner(user: CurrentUser, ownerId: number | undefined) {
   if (user.role === "MANAGER") {
     if (ownerId === undefined) {
-      throw new AppError(
-        400,
-        "VALIDATION_ERROR",
+      throw new ValidationError(
         "Managers must choose an owner from their team",
         [{ path: ["ownerId"], message: "Required for managers" }],
       );
@@ -436,9 +348,7 @@ async function resolveOwner(user: CurrentUser, ownerId: number | undefined) {
     return ownerId;
   }
   if (ownerId === undefined || ownerId === user.id) return user.id;
-  throw new AppError(
-    403,
-    "FORBIDDEN",
+  throw new ForbiddenError(
     "Sellers can only create opportunities for themselves",
   );
 }
@@ -503,7 +413,7 @@ export function updateOpportunity(
           items?.length ??
           (await tx.opportunityItem.count({ where: { opportunityId: id } })),
       });
-      if (missing.length > 0) throw missingValueOrItemsError(missing);
+      if (missing.length > 0) throw new MissingValueOrItemsError(missing);
     }
 
     const company = companyName
