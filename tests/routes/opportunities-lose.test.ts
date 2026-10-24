@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.ts";
 import type { Stage } from "../../src/domain/stages.ts";
 import type { Prisma, User } from "../../src/generated/prisma/client.ts";
-import { prisma } from "../../src/lib/prisma.ts";
 import { resetDatabase } from "../helpers/database.ts";
 import { createOpportunity, createUser } from "../helpers/factories.ts";
 
@@ -33,11 +32,12 @@ const lose = (id: number | string, body: object, user: User = ana) =>
     .set("X-User-Id", String(user.id))
     .send(body);
 
-const findOpportunity = (id: number) =>
-  prisma.opportunity.findUniqueOrThrow({ where: { id } });
-
-const stageChangesOf = (opportunityId: number) =>
-  prisma.stageChange.findMany({ where: { opportunityId } });
+const detailOf = async (id: number): Promise<unknown> =>
+  (
+    await request(app)
+      .get(`/api/opportunities/${id}`)
+      .set("X-User-Id", String(ana.id))
+  ).body as unknown;
 
 describe("POST /api/opportunities/:id/lose", () => {
   beforeEach(async () => {
@@ -92,7 +92,7 @@ describe("POST /api/opportunities/:id/lose", () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
-      expect((await findOpportunity(id)).stage).toBe("FOLLOW_UP");
+      expect(await detailOf(id)).toMatchObject({ stage: "FOLLOW_UP" });
     });
   });
 
@@ -120,14 +120,17 @@ describe("POST /api/opportunities/:id/lose", () => {
           { allowed: false, reason: "FINAL_STAGE" },
         ],
       });
-      expect(await stageChangesOf(id)).toEqual([
-        expect.objectContaining({
-          fromStage: "FOLLOW_UP",
-          toStage: "LOST",
-          changedAt: now,
-          changedById: ana.id,
-        }),
-      ]);
+      expect(await detailOf(id)).toMatchObject({
+        timeline: [
+          {
+            type: "LOST",
+            fromStage: "FOLLOW_UP",
+            at: now.toISOString(),
+            author: { id: ana.id },
+            reason: "PRICE",
+          },
+        ],
+      });
     });
 
     it("saves the trimmed detail for OTHER", async () => {
@@ -139,7 +142,7 @@ describe("POST /api/opportunities/:id/lose", () => {
       });
 
       expect(res.status).toBe(200);
-      expect(await findOpportunity(id)).toMatchObject({
+      expect(await detailOf(id)).toMatchObject({
         lossReason: "OTHER",
         lossDetail: "Cliente fechou a empresa",
       });
@@ -150,7 +153,7 @@ describe("POST /api/opportunities/:id/lose", () => {
 
       await lose(id, { reason: "COMPETITOR", detail: "Fechou com a Brindex" });
 
-      expect(await findOpportunity(id)).toMatchObject({
+      expect(await detailOf(id)).toMatchObject({
         lossReason: "COMPETITOR",
         lossDetail: "Fechou com a Brindex",
       });
@@ -165,7 +168,7 @@ describe("POST /api/opportunities/:id/lose", () => {
 
       await lose(id, { reason: "NO_RESPONSE" });
 
-      expect(await findOpportunity(id)).toMatchObject({
+      expect(await detailOf(id)).toMatchObject({
         snoozedUntil: null,
         nextFollowUpAt: null,
         snoozeCount: 1,
@@ -183,7 +186,7 @@ describe("POST /api/opportunities/:id/lose", () => {
       const res = await lose(id, { reason: "NO_BUDGET" });
 
       expect(res.status).toBe(200);
-      expect((await findOpportunity(id)).stage).toBe("LOST");
+      expect(await detailOf(id)).toMatchObject({ stage: "LOST" });
     });
 
     it("lets the manager mark a team opportunity as lost", async () => {
@@ -192,9 +195,9 @@ describe("POST /api/opportunities/:id/lose", () => {
       const res = await lose(id, { reason: "PRICE" }, manager);
 
       expect(res.status).toBe(200);
-      expect(await stageChangesOf(id)).toEqual([
-        expect.objectContaining({ changedById: manager.id }),
-      ]);
+      expect(await detailOf(id)).toMatchObject({
+        timeline: [{ author: { id: manager.id, name: "Marcos" } }],
+      });
     });
   });
 
@@ -208,11 +211,11 @@ describe("POST /api/opportunities/:id/lose", () => {
 
         expect(res.status).toBe(409);
         expect(res.body).toMatchObject({ error: { code: "FINAL_STAGE" } });
-        expect(await findOpportunity(id)).toMatchObject({
+        expect(await detailOf(id)).toMatchObject({
           stage,
           lossReason: null,
+          timeline: [],
         });
-        expect(await stageChangesOf(id)).toEqual([]);
       },
     );
   });

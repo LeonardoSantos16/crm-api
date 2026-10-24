@@ -33,8 +33,12 @@ const move = (id: number | string, body: object, user: User = ana) =>
     .set("X-User-Id", String(user.id))
     .send(body);
 
-const stageChangesOf = (opportunityId: number) =>
-  prisma.stageChange.findMany({ where: { opportunityId } });
+const detailOf = async (id: number): Promise<unknown> =>
+  (
+    await request(app)
+      .get(`/api/opportunities/${id}`)
+      .set("X-User-Id", String(ana.id))
+  ).body as unknown;
 
 describe("POST /api/opportunities/:id/move", () => {
   beforeEach(async () => {
@@ -122,14 +126,17 @@ describe("POST /api/opportunities/:id/move", () => {
         alert: { state: "ON_TIME", dueDate: "2026-10-20", deadlineDays: 5 },
       });
       expect(res.body).toHaveProperty("moves");
-      expect(await stageChangesOf(id)).toEqual([
-        expect.objectContaining({
-          fromStage: "FIRST_CONTACT",
-          toStage: "BUDGET_PRESENTATION",
-          changedAt: now,
-          changedById: ana.id,
-        }),
-      ]);
+      expect(await detailOf(id)).toMatchObject({
+        timeline: [
+          {
+            type: "STAGE_CHANGE",
+            fromStage: "FIRST_CONTACT",
+            toStage: "BUDGET_PRESENTATION",
+            at: now.toISOString(),
+            author: { id: ana.id },
+          },
+        ],
+      });
     });
 
     it("restarts the clock and keeps the snooze count", async () => {
@@ -143,11 +150,9 @@ describe("POST /api/opportunities/:id/move", () => {
       const res = await move(id, { toStage: "FOLLOW_UP" });
 
       expect(res.status).toBe(200);
-      expect(
-        await prisma.opportunity.findUniqueOrThrow({ where: { id } }),
-      ).toMatchObject({
+      expect(await detailOf(id)).toMatchObject({
         stage: "FOLLOW_UP",
-        stageEnteredAt: now,
+        stageEnteredAt: now.toISOString(),
         snoozedUntil: null,
         nextFollowUpAt: null,
         snoozeCount: 1,
@@ -160,18 +165,15 @@ describe("POST /api/opportunities/:id/move", () => {
       const res = await move(id, { toStage: "BUDGET_PRESENTATION" }, manager);
 
       expect(res.status).toBe(200);
-      expect(await stageChangesOf(id)).toEqual([
-        expect.objectContaining({ changedById: manager.id }),
-      ]);
+      expect(await detailOf(id)).toMatchObject({
+        timeline: [{ author: { id: manager.id, name: "Marcos" } }],
+      });
     });
   });
 
   describe("blocked move", () => {
     const expectUnchanged = async (id: number, stage: string) => {
-      expect(
-        (await prisma.opportunity.findUniqueOrThrow({ where: { id } })).stage,
-      ).toBe(stage);
-      expect(await stageChangesOf(id)).toEqual([]);
+      expect(await detailOf(id)).toMatchObject({ stage, timeline: [] });
     };
 
     it("responds 409 INVALID_TRANSITION with the blocking reason", async () => {
@@ -252,9 +254,6 @@ describe("POST /api/opportunities/:id/move", () => {
   });
 
   describe("complete", () => {
-    const itemsOf = (opportunityId: number) =>
-      prisma.opportunityItem.findMany({ where: { opportunityId } });
-
     it("saves the missing data and moves", async () => {
       const { id } = await opportunityOf(ana, {
         estimatedValue: null,
@@ -289,13 +288,10 @@ describe("POST /api/opportunities/:id/move", () => {
       });
 
       expect(res.status).toBe(409);
-      const opportunity = await prisma.opportunity.findUniqueOrThrow({
-        where: { id },
+      expect(await detailOf(id)).toMatchObject({
+        estimatedValue: 1000,
+        items: [{ description: "Caneca", quantity: 10 }],
       });
-      expect(opportunity.estimatedValue?.toNumber()).toBe(1000);
-      expect((await itemsOf(id)).map((item) => item.description)).toEqual([
-        "Caneca",
-      ]);
     });
 
     it("saves nothing when the data is still incomplete", async () => {
@@ -313,10 +309,10 @@ describe("POST /api/opportunities/:id/move", () => {
       expect(res.body).toMatchObject({
         error: { details: { missing: ["items"] } },
       });
-      expect(
-        (await prisma.opportunity.findUniqueOrThrow({ where: { id } }))
-          .estimatedValue,
-      ).toBeNull();
+      expect(await detailOf(id)).toMatchObject({
+        estimatedValue: null,
+        items: [],
+      });
     });
   });
 });
@@ -345,9 +341,9 @@ describe("applyStageChange", () => {
       status: 409,
       code: "STAGE_CONFLICT",
     });
-    expect(
-      (await prisma.opportunity.findUniqueOrThrow({ where: { id } })).stage,
-    ).toBe("FOLLOW_UP");
-    expect(await stageChangesOf(id)).toEqual([]);
+    expect(await detailOf(id)).toMatchObject({
+      stage: "FOLLOW_UP",
+      timeline: [],
+    });
   });
 });
