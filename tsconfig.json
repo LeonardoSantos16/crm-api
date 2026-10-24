@@ -13,5 +13,12 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "prisma", "prisma.config.ts", "eslint.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    "prisma",
+    "prisma.config.ts",
+    "eslint.config.ts",
+    "vitest.config.ts"
+  ]
 }
