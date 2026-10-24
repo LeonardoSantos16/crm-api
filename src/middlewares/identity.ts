@@ -1,10 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
+import type { CurrentUser } from "../types/user.types.ts";
 import { UnauthenticatedError } from "../errors/http-errors.ts";
 import { parsePositiveInteger } from "../lib/positive-integer.ts";
-import {
-  findCurrentUser,
-  type CurrentUser,
-} from "../services/users.service.ts";
+import { findCurrentUser } from "../services/users.service.ts";
 
 declare module "express-serve-static-core" {
   interface Locals {

@@ -1,23 +1,12 @@
-import type { UserRole } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
+import { PrismaUserRepository } from "../repositories/prisma/prisma-user.repository.ts";
 
-export type CurrentUser = {
-  id: number;
-  name: string;
-  role: UserRole;
-  managerId: number | null;
-};
+const users = new PrismaUserRepository(prisma);
 
-export function findCurrentUser(id: number): Promise<CurrentUser | null> {
-  return prisma.user.findUnique({
-    where: { id },
-    select: { id: true, name: true, role: true, managerId: true },
-  });
+export function findCurrentUser(id: number) {
+  return users.findById(id);
 }
 
 export function listUsers() {
-  return prisma.user.findMany({
-    select: { id: true, name: true, role: true, managerId: true },
-    orderBy: [{ role: "desc" }, { name: "asc" }],
-  });
+  return users.list();
 }

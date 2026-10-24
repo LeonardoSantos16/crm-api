@@ -11,59 +11,16 @@ import {
 } from "../domain/dates.ts";
 import { getMoves, type TransitionSubject } from "../domain/transitions.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
-
-const summaryInclude = {
-  company: { select: { id: true, name: true } },
-  owner: { select: { id: true, name: true } },
-  items: { orderBy: { id: "asc" } },
-} satisfies Prisma.OpportunityInclude;
-
-type OpportunitySummaryRow = Prisma.OpportunityGetPayload<{
-  include: typeof summaryInclude;
-}>;
-
-export const opportunityCardInclude = {
-  ...summaryInclude,
-  stageChanges: {
-    where: { toStage: "LOST" },
-    select: { fromStage: true },
-  },
-} satisfies Prisma.OpportunityInclude;
-
-type OpportunityCardRow = Prisma.OpportunityGetPayload<{
-  include: typeof opportunityCardInclude;
-}>;
-
-export const opportunityDetailInclude = {
-  ...summaryInclude,
-  stageChanges: {
-    include: { changedBy: { select: { id: true, name: true } } },
-    orderBy: [{ changedAt: "desc" }, { id: "desc" }],
-  },
-  followUps: {
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  },
-  snoozes: {
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  },
-  comments: {
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-  },
-} satisfies Prisma.OpportunityInclude;
-
-export type OpportunityWithRelations = Prisma.OpportunityGetPayload<{
-  include: typeof opportunityDetailInclude;
-}>;
+import type {
+  OpportunityCardRow,
+  OpportunityDetailRow,
+  OpportunitySummaryRow,
+} from "../types/opportunity-rows.types.ts";
 
 const toNumber = (value: Prisma.Decimal | null) => value?.toNumber() ?? null;
 const toCalendarDate = (value: Date | null) => value && fromDbDate(value);
 
-export function toAlertSubject(
-  opportunity: OpportunitySummaryRow,
-): AlertSubject {
+function toAlertSubject(opportunity: OpportunitySummaryRow): AlertSubject {
   return {
     stage: opportunity.stage,
     stageEnteredAt: opportunity.stageEnteredAt,
@@ -74,7 +31,7 @@ export function toAlertSubject(
   };
 }
 
-export function toTransitionSubject(
+function toTransitionSubject(
   opportunity: OpportunitySummaryRow,
 ): TransitionSubject {
   return {
@@ -85,8 +42,8 @@ export function toTransitionSubject(
 }
 
 function stageChangeEntry(
-  opportunity: OpportunityWithRelations,
-  change: OpportunityWithRelations["stageChanges"][number],
+  opportunity: OpportunityDetailRow,
+  change: OpportunityDetailRow["stageChanges"][number],
 ) {
   const base = { at: change.changedAt, author: change.changedBy };
   if (change.fromStage === null) {
@@ -109,9 +66,7 @@ function stageChangeEntry(
   };
 }
 
-function followUpEntry(
-  followUp: OpportunityWithRelations["followUps"][number],
-) {
+function followUpEntry(followUp: OpportunityDetailRow["followUps"][number]) {
   return {
     type: "FOLLOW_UP" as const,
     at: followUp.createdAt,
@@ -122,7 +77,7 @@ function followUpEntry(
   };
 }
 
-function snoozeEntry(snooze: OpportunityWithRelations["snoozes"][number]) {
+function snoozeEntry(snooze: OpportunityDetailRow["snoozes"][number]) {
   return {
     type: "SNOOZE" as const,
     at: snooze.createdAt,
@@ -132,7 +87,7 @@ function snoozeEntry(snooze: OpportunityWithRelations["snoozes"][number]) {
   };
 }
 
-function commentEntry(comment: OpportunityWithRelations["comments"][number]) {
+function commentEntry(comment: OpportunityDetailRow["comments"][number]) {
   return {
     type: "COMMENT" as const,
     at: comment.createdAt,
@@ -141,7 +96,7 @@ function commentEntry(comment: OpportunityWithRelations["comments"][number]) {
   };
 }
 
-function secondSnoozeSinceLastFollowUp(opportunity: OpportunityWithRelations) {
+function secondSnoozeSinceLastFollowUp(opportunity: OpportunityDetailRow) {
   const lastFollowUpAt = opportunity.followUps[0]?.createdAt;
   const snoozesSince = opportunity.snoozes.filter(
     (snooze) => !lastFollowUpAt || snooze.createdAt > lastFollowUpAt,
@@ -150,7 +105,7 @@ function secondSnoozeSinceLastFollowUp(opportunity: OpportunityWithRelations) {
 }
 
 function escalationEntries(
-  opportunity: OpportunityWithRelations,
+  opportunity: OpportunityDetailRow,
   alert: Alert | null,
 ) {
   if (alert?.state !== "ESCALATED") return [];
@@ -180,10 +135,7 @@ function escalationEntries(
   ];
 }
 
-function toTimeline(
-  opportunity: OpportunityWithRelations,
-  alert: Alert | null,
-) {
+function toTimeline(opportunity: OpportunityDetailRow, alert: Alert | null) {
   return [
     ...escalationEntries(opportunity, alert),
     ...opportunity.comments.map(commentEntry),
@@ -229,7 +181,7 @@ function toOpportunitySummary(opportunity: OpportunitySummaryRow, now: Date) {
 }
 
 export function toOpportunityDetail(
-  opportunity: OpportunityWithRelations,
+  opportunity: OpportunityDetailRow,
   now: Date,
 ) {
   const summary = toOpportunitySummary(opportunity, now);
