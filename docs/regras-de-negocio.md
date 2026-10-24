@@ -55,10 +55,14 @@ Para cada destino bloqueado, a API informa o código da regra. Quando mais de um
 | Código                       | Regra | Exemplo                                            |
 | ---------------------------- | ----- | -------------------------------------------------- |
 | `FINAL_STAGE`                | R5    | qualquer destino a partir de Fechamento ou Perdida |
+| `SAME_STAGE`                 | —     | Follow-up → Follow-up                              |
+| `USE_LOSE_ACTION`            | R4    | Follow-up → Perdida pelo `/move`                   |
 | `NO_RETURN_TO_FIRST_CONTACT` | R7    | Orçamento → Primeiro Contato                       |
 | `ONLY_FROM_FORECAST`         | R3    | Follow-up → Fechamento                             |
 | `RETURN_NOT_ALLOWED`         | R6    | Forecast → Orçamento                               |
 | `ONE_STEP_AT_A_TIME`         | R1    | Primeiro Contato → Follow-up                       |
+
+`SAME_STAGE` e `USE_LOSE_ACTION` só aparecem na resposta do `/move`: os movimentos publicados não incluem a etapa atual nem Perdida.
 
 A falta de valor ou de itens (R2) **não é bloqueio**: o destino aparece como permitido, com a lista do que falta (`estimatedValue`, `items`). O front usa essa lista para pedir os dados antes de mover.
 
