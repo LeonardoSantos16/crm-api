@@ -1,0 +1,172 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  SELLER
+  MANAGER
+}
+
+enum OpportunityStage {
+  FIRST_CONTACT
+  BUDGET_PRESENTATION
+  FOLLOW_UP
+  FORECAST
+  CLOSING
+  LOST
+}
+
+enum LossReason {
+  PRICE
+  DELIVERY_TIME
+  COMPETITOR
+  NO_BUDGET
+  NO_RESPONSE
+  OTHER
+}
+
+enum FollowUpChannel {
+  CALL
+  WHATSAPP
+  EMAIL
+  MEETING
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      UserRole @default(SELLER)
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  managerId Int?
+  manager   User?  @relation("Team", fields: [managerId], references: [id])
+  team      User[] @relation("Team")
+
+  opportunities Opportunity[]
+  stageChanges  StageChange[]
+  followUps     FollowUp[]
+  snoozes       Snooze[]
+  comments      Comment[]
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  opportunities Opportunity[]
+}
+
+// O código exibido (OPP-2001) é derivado do id
+model Opportunity {
+  id                 Int              @id @default(autoincrement())
+  contactName        String?
+  contactPhone       String?
+  contactEmail       String?
+  estimatedValue     Decimal?         @db.Decimal(12, 2)
+  lastContactAt      DateTime?        @db.Timestamptz
+  nextFollowUpAt     DateTime?        @db.Date
+  snoozedUntil       DateTime?        @db.Date
+  snoozeCount        Int              @default(0)
+  proposalValidUntil DateTime?        @db.Date
+  eventDate          DateTime?        @db.Date
+  stage              OpportunityStage @default(FIRST_CONTACT)
+  stageEnteredAt     DateTime         @default(now()) @db.Timestamptz
+  lossReason         LossReason?
+  lossDetail         String?
+  createdAt          DateTime         @default(now()) @db.Timestamptz
+  updatedAt          DateTime         @updatedAt @db.Timestamptz
+
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+  ownerId   Int
+  owner     User    @relation(fields: [ownerId], references: [id])
+
+  items        OpportunityItem[]
+  stageChanges StageChange[]
+  followUps    FollowUp[]
+  snoozes      Snooze[]
+  comments     Comment[]
+
+  @@index([ownerId, stage])
+  @@index([companyId])
+}
+
+model OpportunityItem {
+  id          Int      @id @default(autoincrement())
+  description String
+  quantity    Int
+  unitValue   Decimal? @db.Decimal(12, 2)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId])
+}
+
+model StageChange {
+  id        Int               @id @default(autoincrement())
+  fromStage OpportunityStage?
+  toStage   OpportunityStage
+  changedAt DateTime          @default(now()) @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  changedById   Int?
+  changedBy     User?       @relation(fields: [changedById], references: [id])
+
+  @@index([opportunityId, changedAt])
+}
+
+model FollowUp {
+  id        Int              @id @default(autoincrement())
+  channel   FollowUpChannel?
+  summary   String?
+  nextDate  DateTime?        @db.Date
+  createdAt DateTime         @default(now()) @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?       @relation(fields: [userId], references: [id])
+
+  @@index([opportunityId, createdAt])
+}
+
+model Snooze {
+  id        Int      @id @default(autoincrement())
+  until     DateTime @db.Date
+  reason    String?
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?       @relation(fields: [userId], references: [id])
+
+  @@index([opportunityId, createdAt])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  body      String
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  opportunityId Int
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  userId        Int?
+  user          User?       @relation(fields: [userId], references: [id])
+
+  @@index([opportunityId, createdAt])
+}
