@@ -12,10 +12,30 @@ import {
 import { getMoves, type TransitionSubject } from "../domain/transitions.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 
-export const opportunityDetailInclude = {
+const summaryInclude = {
   company: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true } },
   items: { orderBy: { id: "asc" } },
+} satisfies Prisma.OpportunityInclude;
+
+type OpportunitySummaryRow = Prisma.OpportunityGetPayload<{
+  include: typeof summaryInclude;
+}>;
+
+export const opportunityCardInclude = {
+  ...summaryInclude,
+  stageChanges: {
+    where: { toStage: "LOST" },
+    select: { fromStage: true },
+  },
+} satisfies Prisma.OpportunityInclude;
+
+type OpportunityCardRow = Prisma.OpportunityGetPayload<{
+  include: typeof opportunityCardInclude;
+}>;
+
+export const opportunityDetailInclude = {
+  ...summaryInclude,
   stageChanges: {
     include: { changedBy: { select: { id: true, name: true } } },
     orderBy: [{ changedAt: "desc" }, { id: "desc" }],
@@ -42,7 +62,7 @@ const toNumber = (value: Prisma.Decimal | null) => value?.toNumber() ?? null;
 const toCalendarDate = (value: Date | null) => value && fromDbDate(value);
 
 export function toAlertSubject(
-  opportunity: OpportunityWithRelations,
+  opportunity: OpportunitySummaryRow,
 ): AlertSubject {
   return {
     stage: opportunity.stage,
@@ -55,7 +75,7 @@ export function toAlertSubject(
 }
 
 export function toTransitionSubject(
-  opportunity: OpportunityWithRelations,
+  opportunity: OpportunitySummaryRow,
 ): TransitionSubject {
   return {
     stage: opportunity.stage,
@@ -175,10 +195,7 @@ function toTimeline(
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
-export function toOpportunityDetail(
-  opportunity: OpportunityWithRelations,
-  now: Date,
-) {
+function toOpportunitySummary(opportunity: OpportunitySummaryRow, now: Date) {
   const alert = computeAlert(toAlertSubject(opportunity), now);
 
   return {
@@ -208,6 +225,20 @@ export function toOpportunityDetail(
     lossDetail: opportunity.lossDetail,
     alert,
     moves: getMoves(toTransitionSubject(opportunity)),
-    timeline: toTimeline(opportunity, alert),
+  };
+}
+
+export function toOpportunityDetail(
+  opportunity: OpportunityWithRelations,
+  now: Date,
+) {
+  const summary = toOpportunitySummary(opportunity, now);
+  return { ...summary, timeline: toTimeline(opportunity, summary.alert) };
+}
+
+export function toOpportunityCard(opportunity: OpportunityCardRow, now: Date) {
+  return {
+    ...toOpportunitySummary(opportunity, now),
+    lostFromStage: opportunity.stageChanges[0]?.fromStage ?? null,
   };
 }

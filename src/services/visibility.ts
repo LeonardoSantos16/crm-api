@@ -25,3 +25,18 @@ export async function findVisibleOpportunity(
   if (!opportunity) throw opportunityNotFound();
   return opportunity;
 }
+
+export async function assertTeamMember(user: CurrentUser, ownerId: number) {
+  const member =
+    user.role === "MANAGER" &&
+    (await prisma.user.findFirst({
+      where: { id: ownerId, managerId: user.id },
+    }));
+  if (!member) {
+    throw new AppError(
+      403,
+      "FORBIDDEN",
+      "Only a manager can choose an owner from their team",
+    );
+  }
+}

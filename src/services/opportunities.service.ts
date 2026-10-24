@@ -1,4 +1,9 @@
-import { toDbDate, type CalendarDate } from "../domain/dates.ts";
+import {
+  diffDays,
+  toDbDate,
+  toLocalDate,
+  type CalendarDate,
+} from "../domain/dates.ts";
 import { isFinalStage, type Stage } from "../domain/stages.ts";
 import { checkTransition } from "../domain/transitions.ts";
 import { AppError } from "../errors/app-error.ts";
@@ -9,12 +14,25 @@ import type {
   Prisma,
 } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
+import { needsAttention, type AlertState } from "../domain/alert.ts";
 import {
+  byMostRecent,
+  byPriority,
+  byValue,
+  type Rankable,
+} from "../domain/priority.ts";
+import {
+  opportunityCardInclude,
   opportunityDetailInclude,
+  toOpportunityCard,
   toOpportunityDetail,
 } from "./opportunity-detail.ts";
 import type { CurrentUser } from "./users.service.ts";
-import { findVisibleOpportunity } from "./visibility.ts";
+import {
+  assertTeamMember,
+  findVisibleOpportunity,
+  visibleOpportunitiesWhere,
+} from "./visibility.ts";
 
 export type ItemInput = {
   description: string;
@@ -290,4 +308,84 @@ export function commentOpportunity(
       data: { opportunityId: id, userId: user.id, body, createdAt: now },
     });
   });
+}
+
+export type ListQuery = {
+  q?: string | undefined;
+  situation?: AlertState[] | undefined;
+  ownerId?: number | undefined;
+  sort?: "priority" | "value" | undefined;
+  allClosed?: boolean | undefined;
+  includeLost?: boolean | undefined;
+};
+
+const RECENT_FINAL_DAYS = 30;
+
+type BoardCard = Rankable & { stage: Stage };
+
+const boardGroup = (card: BoardCard) =>
+  card.stage === "CLOSING" ? 1 : card.stage === "LOST" ? 2 : 0;
+
+function byBoardPriority(a: BoardCard, b: BoardCard) {
+  const group = boardGroup(a) - boardGroup(b);
+  if (group !== 0) return group;
+  return boardGroup(a) === 0 ? byPriority(a, b) : byMostRecent(a, b);
+}
+
+const normalizeText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+export async function listOpportunities(
+  user: CurrentUser,
+  {
+    q,
+    situation,
+    ownerId,
+    sort = "priority",
+    allClosed = false,
+    includeLost = false,
+  }: ListQuery,
+  now: Date,
+) {
+  if (ownerId !== undefined) await assertTeamMember(user, ownerId);
+
+  const rows = await prisma.opportunity.findMany({
+    where: {
+      ...visibleOpportunitiesWhere(user),
+      ...(ownerId === undefined ? {} : { ownerId }),
+      ...(includeLost ? {} : { stage: { not: "LOST" as const } }),
+    },
+    include: opportunityCardInclude,
+  });
+  const cards = rows.map((row) => toOpportunityCard(row, now));
+
+  const today = toLocalDate(now);
+  const isRecent = (enteredAt: Date) =>
+    diffDays(toLocalDate(enteredAt), today) <= RECENT_FINAL_DAYS;
+  const search = q ? normalizeText(q) : undefined;
+  const isListed = (card: (typeof cards)[number]) => {
+    if (card.stage === "CLOSING") {
+      return allClosed || isRecent(card.stageEnteredAt);
+    }
+    if (card.stage === "LOST") return isRecent(card.stageEnteredAt);
+    return true;
+  };
+  const matchesSearch = (card: (typeof cards)[number]) =>
+    !search ||
+    normalizeText(card.code).includes(search) ||
+    normalizeText(card.company.name).includes(search);
+  const matchesSituation = (card: (typeof cards)[number]) =>
+    !situation || (card.alert !== null && situation.includes(card.alert.state));
+
+  const matching = cards.filter(
+    (card) => isListed(card) && matchesSearch(card) && matchesSituation(card),
+  );
+
+  return {
+    opportunities: matching.sort(sort === "value" ? byValue : byBoardPriority),
+    needsAttention: cards.filter((card) => needsAttention(card.alert)).length,
+  };
 }

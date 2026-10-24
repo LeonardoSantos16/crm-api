@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getHealth } from "../controllers/health.controller.ts";
 import {
+  getOpportunities,
   getOpportunity,
   postComment,
   postFollowUp,
@@ -23,6 +24,7 @@ api.get("/users", getUsers);
 const opportunities = Router();
 api.use("/opportunities", requireUser, opportunities);
 
+opportunities.get("/", getOpportunities);
 opportunities.get("/:id", getOpportunity);
 opportunities.post("/:id/move", postMove);
 opportunities.post("/:id/lose", postLose);

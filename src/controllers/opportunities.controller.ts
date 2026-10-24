@@ -6,12 +6,14 @@ import {
   toLocalDate,
   type CalendarDate,
 } from "../domain/dates.ts";
+import { ALERT_STATES } from "../domain/alert.ts";
 import { FUNNEL_STAGES } from "../domain/stages.ts";
 import { FollowUpChannel, LossReason } from "../generated/prisma/client.ts";
 import {
   commentOpportunity,
   followUpOpportunity,
   getOpportunityDetail,
+  listOpportunities,
   loseOpportunity,
   moveOpportunity,
   snoozeOpportunity,
@@ -81,6 +83,26 @@ const commentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
 });
 
+const repeatedParam = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (value === undefined ? undefined : [value].flat()),
+    z.array(schema).optional(),
+  );
+
+const booleanParam = z
+  .enum(["true", "false"])
+  .transform((value) => value === "true")
+  .optional();
+
+const listSchema = z.object({
+  q: z.string().trim().optional(),
+  situation: repeatedParam(z.enum(ALERT_STATES)),
+  ownerId: z.coerce.number().int().positive().optional(),
+  sort: z.enum(["priority", "value"]).optional(),
+  allClosed: booleanParam,
+  includeLost: booleanParam,
+});
+
 function parseOpportunityId(value: string) {
   if (!POSITIVE_INTEGER.test(value)) throw opportunityNotFound();
   return Number(value);
@@ -133,4 +155,10 @@ export async function postComment(req: Request<{ id: string }>, res: Response) {
   const { body } = commentSchema.parse(req.body);
 
   res.json(await commentOpportunity(res.locals.user, id, body, res.locals.now));
+}
+
+export async function getOpportunities(req: Request, res: Response) {
+  const query = listSchema.parse(req.query);
+
+  res.json(await listOpportunities(res.locals.user, query, res.locals.now));
 }
