@@ -17,7 +17,7 @@ export function findCurrentUser(id: number): Promise<CurrentUser | null> {
 
 export function listUsers() {
   return prisma.user.findMany({
-    select: { id: true, name: true, role: true },
+    select: { id: true, name: true, role: true, managerId: true },
     orderBy: [{ role: "desc" }, { name: "asc" }],
   });
 }

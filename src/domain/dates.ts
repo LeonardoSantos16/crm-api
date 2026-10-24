@@ -23,8 +23,16 @@ export function toLocalDate(instant: Date): CalendarDate {
   return localDateFormat.format(instant);
 }
 
+export function startOfLocalDay(date: CalendarDate): Date {
+  return new Date(`${date}T00:00:00-03:00`);
+}
+
 export function fromDbDate(date: Date): CalendarDate {
   return date.toISOString().slice(0, 10);
+}
+
+export function toDbDate(date: CalendarDate): Date {
+  return toUtcMidnight(date);
 }
 
 export function addDays(date: CalendarDate, days: number): CalendarDate {

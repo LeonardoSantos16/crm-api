@@ -2,7 +2,14 @@ import { addDays, diffDays, toLocalDate, type CalendarDate } from "./dates.ts";
 import { STAGE_DEADLINE_DAYS } from "./deadlines.ts";
 import { isFinalStage, type Stage } from "./stages.ts";
 
-export type AlertState = "ON_TIME" | "ATTENTION" | "SNOOZED" | "ESCALATED";
+export const ALERT_STATES = [
+  "ON_TIME",
+  "ATTENTION",
+  "SNOOZED",
+  "ESCALATED",
+] as const;
+
+export type AlertState = (typeof ALERT_STATES)[number];
 
 export type AlertSubject = {
   stage: Stage;

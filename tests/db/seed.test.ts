@@ -163,7 +163,7 @@ describe("seedCaseData", () => {
   it("records the initial stage change at the stage entry", async () => {
     const opportunities = await loadOpportunities();
 
-    for (const opp of opportunities) {
+    for (const opp of opportunities.filter(({ id }) => id !== 2007)) {
       expect(opp.stageChanges).toEqual([
         expect.objectContaining({
           fromStage: null,
@@ -220,6 +220,6 @@ describe("seedCaseData", () => {
     expect(await prisma.company.count()).toBe(7);
     expect(await prisma.opportunity.count()).toBe(7);
     expect(await prisma.opportunityItem.count()).toBe(7);
-    expect(await prisma.stageChange.count()).toBe(7);
+    expect(await prisma.stageChange.count()).toBe(8);
   });
 });

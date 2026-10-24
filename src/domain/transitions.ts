@@ -38,6 +38,15 @@ const blocked = (reason: MoveBlockReason): TransitionResult => ({
   reason,
 });
 
+export function missingValueOrItems(
+  subject: Pick<TransitionSubject, "hasEstimatedValue" | "itemCount">,
+): MissingField[] {
+  const missing: MissingField[] = [];
+  if (!subject.hasEstimatedValue) missing.push("estimatedValue");
+  if (subject.itemCount === 0) missing.push("items");
+  return missing;
+}
+
 export function checkTransition(
   subject: TransitionSubject,
   toStage: Stage,
@@ -60,9 +69,7 @@ export function checkTransition(
   if (step > 1) return blocked("ONE_STEP_AT_A_TIME");
 
   if (toStage === "BUDGET_PRESENTATION") {
-    const missing: MissingField[] = [];
-    if (!subject.hasEstimatedValue) missing.push("estimatedValue");
-    if (subject.itemCount === 0) missing.push("items");
+    const missing = missingValueOrItems(subject);
     if (missing.length > 0) return { allowed: true, missing };
   }
 
