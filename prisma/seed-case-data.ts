@@ -4,7 +4,7 @@ import type {
   PrismaClient,
 } from "../src/generated/prisma/client.ts";
 
-const contactAt = (date: string) => new Date(`${date}T12:00:00-03:00`);
+const contactAt = (date: string) => new Date(`${date}T00:00:00-03:00`);
 const calendarDate = (date: string) => new Date(`${date}T00:00:00Z`);
 
 const opportunities: {
@@ -18,6 +18,7 @@ const opportunities: {
   proposalValidUntil?: string;
   eventDate: string;
   stage: OpportunityStage;
+  lostFrom?: OpportunityStage;
   lossReason?: LossReason;
   lossDetail?: string;
 }[] = [
@@ -103,6 +104,7 @@ const opportunities: {
     proposalValidUntil: "2026-10-08",
     eventDate: "2026-10-20",
     stage: "LOST",
+    lostFrom: "BUDGET_PRESENTATION",
     lossReason: "OTHER",
     lossDetail: "Motivo não informado nos dados do case",
   },
@@ -152,13 +154,32 @@ export async function seedCaseData(prisma: PrismaClient) {
           lossDetail: opp.lossDetail ?? null,
           companyId: company.id,
           ownerId: sellers.get(opp.owner)!,
-          items: { create: { description: opp.gift, quantity: opp.quantity } },
-          stageChanges: {
+          items: {
             create: {
-              fromStage: null,
-              toStage: opp.stage,
-              changedAt: stageEnteredAt,
+              description: opp.gift,
+              quantity: opp.quantity,
+              unitValue: (Number(opp.estimatedValue) / opp.quantity).toFixed(2),
             },
+          },
+          stageChanges: {
+            create: opp.lostFrom
+              ? [
+                  {
+                    fromStage: null,
+                    toStage: opp.lostFrom,
+                    changedAt: stageEnteredAt,
+                  },
+                  {
+                    fromStage: opp.lostFrom,
+                    toStage: opp.stage,
+                    changedAt: stageEnteredAt,
+                  },
+                ]
+              : {
+                  fromStage: null,
+                  toStage: opp.stage,
+                  changedAt: stageEnteredAt,
+                },
           },
         },
       });

@@ -14,9 +14,9 @@ export function createApp({
   const app = express();
 
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN }));
-  app.use(express.json());
+  app.use(cors({ origin: env.CORS_ORIGIN, exposedHeaders: ["X-Today"] }));
   app.use(requestTime(clock));
+  app.use(express.json());
 
   app.use(routes);
 
