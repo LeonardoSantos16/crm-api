@@ -7,6 +7,10 @@ export const opportunityDetailInclude = {
   company: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true } },
   items: { orderBy: { id: "asc" } },
+  stageChanges: {
+    include: { changedBy: { select: { id: true, name: true } } },
+    orderBy: [{ changedAt: "desc" }, { id: "desc" }],
+  },
 } satisfies Prisma.OpportunityInclude;
 
 export type OpportunityWithRelations = Prisma.OpportunityGetPayload<{
@@ -37,6 +41,37 @@ export function toTransitionSubject(
     hasEstimatedValue: opportunity.estimatedValue !== null,
     itemCount: opportunity.items.length,
   };
+}
+
+function toTimelineEntry(
+  opportunity: OpportunityWithRelations,
+  change: OpportunityWithRelations["stageChanges"][number],
+) {
+  const base = { at: change.changedAt, author: change.changedBy };
+  if (change.fromStage === null) {
+    return { ...base, type: "CREATED" as const, stage: change.toStage };
+  }
+  if (change.toStage === "LOST") {
+    return {
+      ...base,
+      type: "LOST" as const,
+      fromStage: change.fromStage,
+      reason: opportunity.lossReason,
+      detail: opportunity.lossDetail,
+    };
+  }
+  return {
+    ...base,
+    type: "STAGE_CHANGE" as const,
+    fromStage: change.fromStage,
+    toStage: change.toStage,
+  };
+}
+
+function toTimeline(opportunity: OpportunityWithRelations) {
+  return opportunity.stageChanges.map((change) =>
+    toTimelineEntry(opportunity, change),
+  );
 }
 
 export function toOpportunityDetail(
@@ -70,5 +105,6 @@ export function toOpportunityDetail(
     lossDetail: opportunity.lossDetail,
     alert: computeAlert(toAlertSubject(opportunity), now),
     moves: getMoves(toTransitionSubject(opportunity)),
+    timeline: toTimeline(opportunity),
   };
 }

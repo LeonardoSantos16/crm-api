@@ -176,3 +176,12 @@ export async function loseOpportunity(
 
   return toOpportunityDetail(opportunity, now);
 }
+
+export async function getOpportunityDetail(
+  user: CurrentUser,
+  id: number,
+  now: Date,
+) {
+  await findVisibleOpportunity(user, id);
+  return toOpportunityDetail(await loadDetail(prisma, id), now);
+}

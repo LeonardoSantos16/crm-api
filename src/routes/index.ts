@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { getHealth } from "../controllers/health.controller.ts";
-import { postLose, postMove } from "../controllers/opportunities.controller.ts";
+import {
+  getOpportunity,
+  postLose,
+  postMove,
+} from "../controllers/opportunities.controller.ts";
 import { getUsers } from "../controllers/users.controller.ts";
 import { requireUser } from "../middlewares/identity.ts";
 
@@ -16,5 +20,6 @@ api.get("/users", getUsers);
 const opportunities = Router();
 api.use("/opportunities", requireUser, opportunities);
 
+opportunities.get("/:id", getOpportunity);
 opportunities.post("/:id/move", postMove);
 opportunities.post("/:id/lose", postLose);

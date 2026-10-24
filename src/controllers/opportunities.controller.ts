@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FUNNEL_STAGES } from "../domain/stages.ts";
 import { LossReason } from "../generated/prisma/client.ts";
 import {
+  getOpportunityDetail,
   loseOpportunity,
   moveOpportunity,
 } from "../services/opportunities.service.ts";
@@ -58,4 +59,13 @@ export async function postLose(req: Request<{ id: string }>, res: Response) {
   const input = loseSchema.parse(req.body);
 
   res.json(await loseOpportunity(res.locals.user, id, input, res.locals.now));
+}
+
+export async function getOpportunity(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const id = parseOpportunityId(req.params.id);
+
+  res.json(await getOpportunityDetail(res.locals.user, id, res.locals.now));
 }
