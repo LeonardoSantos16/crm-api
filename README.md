@@ -146,3 +146,13 @@ Detalhes: [ADR 0002](docs/adr/0002-historico-em-tabelas-tipadas.md) e [ADR 0007]
 - **Escalonamento** sem notificação nem worker. É a próxima etapa, prevista no front.
 - **Retorno sem contato:** um retorno pode ser marcado sem ter acontecido. A data no histórico torna o padrão visível.
 - **Dados do seed:** o case não informa a data de entrada na etapa (o seed usa a do último contato) nem o motivo da perda da OPP-2007 (registrado como "Outro").
+
+## Uso de IA
+
+A API foi desenvolvida com o Claude Code:
+
+- **Definição das regras:** as regras de transição e do alerta foram fechadas em rodadas de perguntas e respostas (skill `grilling`), antes do código. O resultado está em [docs/regras-de-negocio.md](docs/regras-de-negocio.md) e nos ADRs.
+- **TDD:** a implementação seguiu um plano de etapas, com a skill `tdd`. Em cada etapa, os casos de teste foram listados e aprovados por mim antes do ciclo red → green → refactor. Os commits seguem o par `test:` / `feat:`.
+- **Prisma 7:** as skills oficiais do Prisma (`.claude/skills/prisma-*`) serviram de referência para a configuração do client, do adapter `pg` e das migrations.
+- **Commits e PRs:** mensagens de commit e textos de PR escritos com auxílio do Claude Code.
+- **Implementação:** as decisões de regras de negócio e de arquitetura são minhas. Em um fluxo padrão, eu seguiria TDD: os testes seriam gerados pela IA, com os stubs revisados por mim, e a implementação da etapa Green seria feita manualmente. Por falta de tempo, devido a motivos pessoais, acabei usando a IA também em grande parte da implementação, com a revisão do código concentrada principalmente nos PRs. Como esse código inicial não seguia um padrão estrutural, é possível notar verbosidade e alto acoplamento no PR https://github.com/LeonardoSantos16/crm-api/pull/10, no qual, após finalizar o back-end e o front-end, refatorei todo o código, separando-o em camadas e aplicando os princípios SOLID para deixá-lo no meu padrão.
