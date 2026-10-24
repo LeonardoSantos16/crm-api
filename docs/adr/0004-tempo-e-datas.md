@@ -17,6 +17,7 @@ O alerta compara datas: entrada na etapa, último retorno, vencimento. Três pro
 - **Limite:** atrasada só quando hoje é **posterior** ao vencimento. No dia do vencimento a oportunidade está em dia ("Vence hoje").
 - **"Agora" injetável:** as funções de domínio recebem `now` por parâmetro e nunca leem o relógio. Os testes passam datas fixas.
 - **`REFERENCE_DATE`** (opcional, `YYYY-MM-DD`) fixa o "hoje" da API. Sem ele, vale o relógio real. O `.env.example` traz `2026-10-15`, o mesmo "hoje" fixo do mock do front.
+- **Relógio deslocado, não congelado:** com `REFERENCE_DATE`, a API desloca o relógio real por um número fixo de dias, calculado na inicialização. O horário continua o real, então as ações da demonstração ficam em ordem na timeline; se o servidor passar da meia-noite, o dia avança para o seguinte.
 
 ## Alternativas consideradas
 
