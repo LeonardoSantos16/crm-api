@@ -1,10 +1,10 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { createApp } from "../src/app.ts";
+import { createApp } from "../../src/app.ts";
 
 const app = createApp();
 
-describe("app", () => {
+describe("error handling", () => {
   it("responds 404 with the standard error body for unknown routes", async () => {
     const res = await request(app).get("/api/does-not-exist");
 
