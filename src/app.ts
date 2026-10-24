@@ -2,15 +2,19 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { env } from "./config/env.ts";
+import { createContainer } from "./container.ts";
+import type { PrismaClient } from "./generated/prisma/client.ts";
 import { createClock, type Clock } from "./lib/clock.ts";
+import { prisma as defaultPrisma } from "./lib/prisma.ts";
 import { errorHandler } from "./middlewares/error-handler.ts";
 import { notFound } from "./middlewares/not-found.ts";
 import { requestTime } from "./middlewares/request-time.ts";
-import { routes } from "./routes/index.ts";
+import { createRoutes } from "./routes/index.ts";
 
 export function createApp({
   clock = createClock({ referenceDate: env.REFERENCE_DATE }),
-}: { clock?: Clock } = {}) {
+  prisma = defaultPrisma,
+}: { clock?: Clock; prisma?: PrismaClient } = {}) {
   const app = express();
 
   app.use(helmet());
@@ -18,7 +22,7 @@ export function createApp({
   app.use(requestTime(clock));
   app.use(express.json());
 
-  app.use(routes);
+  app.use(createRoutes(createContainer(prisma)));
 
   app.use(notFound);
   app.use(errorHandler);

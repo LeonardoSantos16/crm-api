@@ -1,8 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import type { CurrentUser } from "../types/user.types.ts";
-import { UnauthenticatedError } from "../errors/http-errors.ts";
 import { parsePositiveInteger } from "../lib/positive-integer.ts";
-import { findCurrentUser } from "../services/users.service.ts";
+import type { CurrentUser } from "../types/user.types.ts";
+import type { IdentifyUserUseCase } from "../use-cases/users/identify-user.use-case.ts";
 
 declare module "express-serve-static-core" {
   interface Locals {
@@ -10,17 +9,10 @@ declare module "express-serve-static-core" {
   }
 }
 
-export async function requireUser(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  const id = parsePositiveInteger(req.get("X-User-Id"));
-  if (id === undefined) throw new UnauthenticatedError();
-
-  const user = await findCurrentUser(id);
-  if (!user) throw new UnauthenticatedError();
-
-  res.locals.user = user;
-  next();
+export function requireUser(identifyUser: IdentifyUserUseCase) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const id = parsePositiveInteger(req.get("X-User-Id"));
+    res.locals.user = await identifyUser.execute(id);
+    next();
+  };
 }

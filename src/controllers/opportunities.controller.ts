@@ -1,5 +1,9 @@
 import type { Request, Response } from "express";
 import { toLocalDate } from "../domain/dates.ts";
+import type {
+  OpportunityBoardDto,
+  OpportunityDetailDto,
+} from "../dtos/opportunity-response.dto.ts";
 import { OpportunityNotFoundError } from "../errors/opportunity-errors.ts";
 import { parsePositiveInteger } from "../lib/positive-integer.ts";
 import {
@@ -12,17 +16,30 @@ import {
   snoozeSchema,
   updateSchema,
 } from "../schemas/opportunity.schemas.ts";
-import {
-  commentOpportunity,
-  createOpportunity,
-  followUpOpportunity,
-  getOpportunityDetail,
-  listOpportunities,
-  loseOpportunity,
-  moveOpportunity,
-  snoozeOpportunity,
-  updateOpportunity,
-} from "../services/opportunities.service.ts";
+import type { CommentOpportunityUseCase } from "../use-cases/opportunities/comment-opportunity.use-case.ts";
+import type { CreateOpportunityUseCase } from "../use-cases/opportunities/create-opportunity.use-case.ts";
+import type { FollowUpOpportunityUseCase } from "../use-cases/opportunities/follow-up-opportunity.use-case.ts";
+import type { GetOpportunityDetailUseCase } from "../use-cases/opportunities/get-opportunity-detail.use-case.ts";
+import type { ListOpportunitiesUseCase } from "../use-cases/opportunities/list-opportunities.use-case.ts";
+import type { LoseOpportunityUseCase } from "../use-cases/opportunities/lose-opportunity.use-case.ts";
+import type { MoveOpportunityUseCase } from "../use-cases/opportunities/move-opportunity.use-case.ts";
+import type { SnoozeOpportunityUseCase } from "../use-cases/opportunities/snooze-opportunity.use-case.ts";
+import type { UpdateOpportunityUseCase } from "../use-cases/opportunities/update-opportunity.use-case.ts";
+
+export type OpportunityUseCases = {
+  list: ListOpportunitiesUseCase;
+  getDetail: GetOpportunityDetailUseCase;
+  create: CreateOpportunityUseCase;
+  update: UpdateOpportunityUseCase;
+  move: MoveOpportunityUseCase;
+  lose: LoseOpportunityUseCase;
+  followUp: FollowUpOpportunityUseCase;
+  snooze: SnoozeOpportunityUseCase;
+  comment: CommentOpportunityUseCase;
+};
+
+type IdRequest = Request<{ id: string }>;
+type DetailResponse = Response<OpportunityDetailDto>;
 
 function parseOpportunityId(value: string) {
   const id = parsePositiveInteger(value);
@@ -30,77 +47,128 @@ function parseOpportunityId(value: string) {
   return id;
 }
 
-export async function postMove(req: Request<{ id: string }>, res: Response) {
-  const id = parseOpportunityId(req.params.id);
-  const input = moveSchema.parse(req.body);
+export class OpportunitiesController {
+  private readonly useCases: OpportunityUseCases;
 
-  res.json(await moveOpportunity(res.locals.user, id, input, res.locals.now));
-}
+  constructor(useCases: OpportunityUseCases) {
+    this.useCases = useCases;
+  }
 
-export async function postLose(req: Request<{ id: string }>, res: Response) {
-  const id = parseOpportunityId(req.params.id);
-  const input = loseSchema.parse(req.body);
+  list = async (req: Request, res: Response<OpportunityBoardDto>) => {
+    const query = listSchema.parse(req.query);
 
-  res.json(await loseOpportunity(res.locals.user, id, input, res.locals.now));
-}
+    res.json(
+      await this.useCases.list.execute(res.locals.user, query, res.locals.now),
+    );
+  };
 
-export async function getOpportunity(
-  req: Request<{ id: string }>,
-  res: Response,
-) {
-  const id = parseOpportunityId(req.params.id);
+  getDetail = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
 
-  res.json(await getOpportunityDetail(res.locals.user, id, res.locals.now));
-}
+    res.json(
+      await this.useCases.getDetail.execute(
+        res.locals.user,
+        id,
+        res.locals.now,
+      ),
+    );
+  };
 
-export async function postFollowUp(
-  req: Request<{ id: string }>,
-  res: Response,
-) {
-  const id = parseOpportunityId(req.params.id);
-  const input = followUpSchema(toLocalDate(res.locals.now)).parse(req.body);
+  create = async (req: Request, res: DetailResponse) => {
+    const input = createSchema.parse(req.body);
 
-  res.json(
-    await followUpOpportunity(res.locals.user, id, input, res.locals.now),
-  );
-}
+    res
+      .status(201)
+      .json(
+        await this.useCases.create.execute(
+          res.locals.user,
+          input,
+          res.locals.now,
+        ),
+      );
+  };
 
-export async function postSnooze(req: Request<{ id: string }>, res: Response) {
-  const id = parseOpportunityId(req.params.id);
-  const input = snoozeSchema(toLocalDate(res.locals.now)).parse(req.body);
+  update = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = updateSchema.parse(req.body);
 
-  res.json(await snoozeOpportunity(res.locals.user, id, input, res.locals.now));
-}
+    res.json(
+      await this.useCases.update.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
 
-export async function postComment(req: Request<{ id: string }>, res: Response) {
-  const id = parseOpportunityId(req.params.id);
-  const input = commentSchema.parse(req.body);
+  move = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = moveSchema.parse(req.body);
 
-  res.json(
-    await commentOpportunity(res.locals.user, id, input, res.locals.now),
-  );
-}
+    res.json(
+      await this.useCases.move.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
 
-export async function getOpportunities(req: Request, res: Response) {
-  const query = listSchema.parse(req.query);
+  lose = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = loseSchema.parse(req.body);
 
-  res.json(await listOpportunities(res.locals.user, query, res.locals.now));
-}
+    res.json(
+      await this.useCases.lose.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
 
-export async function postOpportunity(req: Request, res: Response) {
-  const input = createSchema.parse(req.body);
+  followUp = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = followUpSchema(toLocalDate(res.locals.now)).parse(req.body);
 
-  res
-    .status(201)
-    .json(await createOpportunity(res.locals.user, input, res.locals.now));
-}
+    res.json(
+      await this.useCases.followUp.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
 
-export async function patchOpportunity(
-  req: Request<{ id: string }>,
-  res: Response,
-) {
-  const id = parseOpportunityId(req.params.id);
-  const input = updateSchema.parse(req.body);
+  snooze = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = snoozeSchema(toLocalDate(res.locals.now)).parse(req.body);
 
-  res.json(await updateOpportunity(res.locals.user, id, input, res.locals.now));
+    res.json(
+      await this.useCases.snooze.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
+
+  comment = async (req: IdRequest, res: DetailResponse) => {
+    const id = parseOpportunityId(req.params.id);
+    const input = commentSchema.parse(req.body);
+
+    res.json(
+      await this.useCases.comment.execute(
+        res.locals.user,
+        id,
+        input,
+        res.locals.now,
+      ),
+    );
+  };
 }
