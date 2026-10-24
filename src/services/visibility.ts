@@ -1,10 +1,8 @@
-import { AppError } from "../errors/app-error.ts";
+import { ForbiddenError } from "../errors/http-errors.ts";
+import { OpportunityNotFoundError } from "../errors/opportunity-errors.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { prisma } from "../lib/prisma.ts";
 import type { CurrentUser } from "./users.service.ts";
-
-export const opportunityNotFound = () =>
-  new AppError(404, "NOT_FOUND", "Opportunity not found");
 
 export function visibleOpportunitiesWhere(
   user: CurrentUser,
@@ -22,7 +20,7 @@ export async function findVisibleOpportunity(
   const opportunity = await db.opportunity.findFirst({
     where: { id, ...visibleOpportunitiesWhere(user) },
   });
-  if (!opportunity) throw opportunityNotFound();
+  if (!opportunity) throw new OpportunityNotFoundError();
   return opportunity;
 }
 
@@ -33,9 +31,7 @@ export async function assertTeamMember(user: CurrentUser, ownerId: number) {
       where: { id: ownerId, managerId: user.id },
     }));
   if (!member) {
-    throw new AppError(
-      403,
-      "FORBIDDEN",
+    throw new ForbiddenError(
       "Only a manager can choose an owner from their team",
     );
   }

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { AppError } from "../errors/app-error.ts";
+import { UnauthenticatedError } from "../errors/http-errors.ts";
+import { parsePositiveInteger } from "../lib/positive-integer.ts";
 import {
   findCurrentUser,
   type CurrentUser,
@@ -11,25 +12,16 @@ declare module "express-serve-static-core" {
   }
 }
 
-const POSITIVE_INTEGER = /^[1-9]\d*$/;
-
-const unauthenticated = () =>
-  new AppError(
-    401,
-    "UNAUTHENTICATED",
-    "X-User-Id header must identify an existing user",
-  );
-
 export async function requireUser(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
-  const header = req.get("X-User-Id");
-  if (!header || !POSITIVE_INTEGER.test(header)) throw unauthenticated();
+  const id = parsePositiveInteger(req.get("X-User-Id"));
+  if (id === undefined) throw new UnauthenticatedError();
 
-  const user = await findCurrentUser(Number(header));
-  if (!user) throw unauthenticated();
+  const user = await findCurrentUser(id);
+  if (!user) throw new UnauthenticatedError();
 
   res.locals.user = user;
   next();

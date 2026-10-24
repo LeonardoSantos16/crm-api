@@ -1,10 +1,6 @@
-import type { Request, Response } from "express";
+import type { Request } from "express";
+import { RouteNotFoundError } from "../errors/http-errors.ts";
 
-export function notFound(req: Request, res: Response) {
-  res.status(404).json({
-    error: {
-      code: "NOT_FOUND",
-      message: `Route ${req.method} ${req.path} not found`,
-    },
-  });
+export function notFound(req: Request) {
+  throw new RouteNotFoundError(req.method, req.path);
 }
