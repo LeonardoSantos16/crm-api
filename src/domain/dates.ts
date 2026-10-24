@@ -27,6 +27,10 @@ export function fromDbDate(date: Date): CalendarDate {
   return date.toISOString().slice(0, 10);
 }
 
+export function toDbDate(date: CalendarDate): Date {
+  return toUtcMidnight(date);
+}
+
 export function addDays(date: CalendarDate, days: number): CalendarDate {
   return fromDbDate(
     new Date(toUtcMidnight(date).getTime() + days * MS_PER_DAY),

@@ -1,11 +1,19 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { FUNNEL_STAGES } from "../domain/stages.ts";
-import { LossReason } from "../generated/prisma/client.ts";
 import {
+  addDays,
+  isCalendarDate,
+  toLocalDate,
+  type CalendarDate,
+} from "../domain/dates.ts";
+import { FUNNEL_STAGES } from "../domain/stages.ts";
+import { FollowUpChannel, LossReason } from "../generated/prisma/client.ts";
+import {
+  followUpOpportunity,
   getOpportunityDetail,
   loseOpportunity,
   moveOpportunity,
+  snoozeOpportunity,
 } from "../services/opportunities.service.ts";
 import { opportunityNotFound } from "../services/visibility.ts";
 
@@ -27,19 +35,45 @@ const moveSchema = z.object({
     .optional(),
 });
 
+const optionalText = z
+  .string()
+  .trim()
+  .max(500)
+  .transform((value) => value || undefined)
+  .optional();
+
 const loseSchema = z
   .object({
     reason: z.enum(LossReason),
-    detail: z
-      .string()
-      .trim()
-      .max(500)
-      .transform((value) => value || undefined)
-      .optional(),
+    detail: optionalText,
   })
   .refine((body) => body.reason !== "OTHER" || body.detail, {
     path: ["detail"],
     message: "Detail is required when the reason is OTHER",
+  });
+
+const ACTION_WINDOW_DAYS = 30;
+
+const actionDate = (today: CalendarDate) =>
+  z
+    .string()
+    .refine(isCalendarDate, "Expected a YYYY-MM-DD date")
+    .refine(
+      (date) => date > today && date <= addDays(today, ACTION_WINDOW_DAYS),
+      `Expected a date after today and within ${ACTION_WINDOW_DAYS} days`,
+    );
+
+const followUpSchema = (today: CalendarDate) =>
+  z.object({
+    channel: z.enum(FollowUpChannel).optional(),
+    summary: optionalText,
+    nextDate: actionDate(today).optional(),
+  });
+
+const snoozeSchema = (today: CalendarDate) =>
+  z.object({
+    until: actionDate(today),
+    reason: optionalText,
   });
 
 function parseOpportunityId(value: string) {
@@ -68,4 +102,23 @@ export async function getOpportunity(
   const id = parseOpportunityId(req.params.id);
 
   res.json(await getOpportunityDetail(res.locals.user, id, res.locals.now));
+}
+
+export async function postFollowUp(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const id = parseOpportunityId(req.params.id);
+  const input = followUpSchema(toLocalDate(res.locals.now)).parse(req.body);
+
+  res.json(
+    await followUpOpportunity(res.locals.user, id, input, res.locals.now),
+  );
+}
+
+export async function postSnooze(req: Request<{ id: string }>, res: Response) {
+  const id = parseOpportunityId(req.params.id);
+  const input = snoozeSchema(toLocalDate(res.locals.now)).parse(req.body);
+
+  res.json(await snoozeOpportunity(res.locals.user, id, input, res.locals.now));
 }

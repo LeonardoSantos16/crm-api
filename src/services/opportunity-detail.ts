@@ -11,6 +11,14 @@ export const opportunityDetailInclude = {
     include: { changedBy: { select: { id: true, name: true } } },
     orderBy: [{ changedAt: "desc" }, { id: "desc" }],
   },
+  followUps: {
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  },
+  snoozes: {
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  },
 } satisfies Prisma.OpportunityInclude;
 
 export type OpportunityWithRelations = Prisma.OpportunityGetPayload<{
@@ -43,7 +51,7 @@ export function toTransitionSubject(
   };
 }
 
-function toTimelineEntry(
+function stageChangeEntry(
   opportunity: OpportunityWithRelations,
   change: OpportunityWithRelations["stageChanges"][number],
 ) {
@@ -68,10 +76,37 @@ function toTimelineEntry(
   };
 }
 
+function followUpEntry(
+  followUp: OpportunityWithRelations["followUps"][number],
+) {
+  return {
+    type: "FOLLOW_UP" as const,
+    at: followUp.createdAt,
+    author: followUp.user,
+    channel: followUp.channel,
+    summary: followUp.summary,
+    nextDate: toCalendarDate(followUp.nextDate),
+  };
+}
+
+function snoozeEntry(snooze: OpportunityWithRelations["snoozes"][number]) {
+  return {
+    type: "SNOOZE" as const,
+    at: snooze.createdAt,
+    author: snooze.user,
+    until: fromDbDate(snooze.until),
+    reason: snooze.reason,
+  };
+}
+
 function toTimeline(opportunity: OpportunityWithRelations) {
-  return opportunity.stageChanges.map((change) =>
-    toTimelineEntry(opportunity, change),
-  );
+  return [
+    ...opportunity.snoozes.map(snoozeEntry),
+    ...opportunity.followUps.map(followUpEntry),
+    ...opportunity.stageChanges.map((change) =>
+      stageChangeEntry(opportunity, change),
+    ),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 
 export function toOpportunityDetail(
