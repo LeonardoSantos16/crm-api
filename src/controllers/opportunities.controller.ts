@@ -9,6 +9,7 @@ import {
 import { FUNNEL_STAGES } from "../domain/stages.ts";
 import { FollowUpChannel, LossReason } from "../generated/prisma/client.ts";
 import {
+  commentOpportunity,
   followUpOpportunity,
   getOpportunityDetail,
   loseOpportunity,
@@ -76,6 +77,10 @@ const snoozeSchema = (today: CalendarDate) =>
     reason: optionalText,
   });
 
+const commentSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+});
+
 function parseOpportunityId(value: string) {
   if (!POSITIVE_INTEGER.test(value)) throw opportunityNotFound();
   return Number(value);
@@ -121,4 +126,11 @@ export async function postSnooze(req: Request<{ id: string }>, res: Response) {
   const input = snoozeSchema(toLocalDate(res.locals.now)).parse(req.body);
 
   res.json(await snoozeOpportunity(res.locals.user, id, input, res.locals.now));
+}
+
+export async function postComment(req: Request<{ id: string }>, res: Response) {
+  const id = parseOpportunityId(req.params.id);
+  const { body } = commentSchema.parse(req.body);
+
+  res.json(await commentOpportunity(res.locals.user, id, body, res.locals.now));
 }

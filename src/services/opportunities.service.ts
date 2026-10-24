@@ -104,21 +104,36 @@ export async function applyStageChange(
   });
 }
 
-async function actOnOpenOpportunity(
+type OpportunityAction = (
+  tx: Prisma.TransactionClient,
+  current: Opportunity,
+) => Promise<void>;
+
+async function actOnOpportunity(
   user: CurrentUser,
   id: number,
   now: Date,
-  action: (tx: Prisma.TransactionClient, current: Opportunity) => Promise<void>,
+  action: OpportunityAction,
 ) {
   const opportunity = await prisma.$transaction(async (tx) => {
     const current = await findVisibleOpportunity(user, id, tx);
-    if (isFinalStage(current.stage)) throw finalStageError();
-
     await action(tx, current);
     return loadDetail(tx, id);
   });
 
   return toOpportunityDetail(opportunity, now);
+}
+
+function actOnOpenOpportunity(
+  user: CurrentUser,
+  id: number,
+  now: Date,
+  action: OpportunityAction,
+) {
+  return actOnOpportunity(user, id, now, async (tx, current) => {
+    if (isFinalStage(current.stage)) throw finalStageError();
+    await action(tx, current);
+  });
 }
 
 export function moveOpportunity(
@@ -262,4 +277,17 @@ export async function getOpportunityDetail(
 ) {
   await findVisibleOpportunity(user, id);
   return toOpportunityDetail(await loadDetail(prisma, id), now);
+}
+
+export function commentOpportunity(
+  user: CurrentUser,
+  id: number,
+  body: string,
+  now: Date,
+) {
+  return actOnOpportunity(user, id, now, async (tx) => {
+    await tx.comment.create({
+      data: { opportunityId: id, userId: user.id, body, createdAt: now },
+    });
+  });
 }

@@ -19,6 +19,10 @@ export const opportunityDetailInclude = {
     include: { user: { select: { id: true, name: true } } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   },
+  comments: {
+    include: { user: { select: { id: true, name: true } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  },
 } satisfies Prisma.OpportunityInclude;
 
 export type OpportunityWithRelations = Prisma.OpportunityGetPayload<{
@@ -99,8 +103,18 @@ function snoozeEntry(snooze: OpportunityWithRelations["snoozes"][number]) {
   };
 }
 
+function commentEntry(comment: OpportunityWithRelations["comments"][number]) {
+  return {
+    type: "COMMENT" as const,
+    at: comment.createdAt,
+    author: comment.user,
+    body: comment.body,
+  };
+}
+
 function toTimeline(opportunity: OpportunityWithRelations) {
   return [
+    ...opportunity.comments.map(commentEntry),
     ...opportunity.snoozes.map(snoozeEntry),
     ...opportunity.followUps.map(followUpEntry),
     ...opportunity.stageChanges.map((change) =>

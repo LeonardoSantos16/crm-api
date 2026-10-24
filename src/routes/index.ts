@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getHealth } from "../controllers/health.controller.ts";
 import {
   getOpportunity,
+  postComment,
   postFollowUp,
   postLose,
   postMove,
@@ -27,3 +28,4 @@ opportunities.post("/:id/move", postMove);
 opportunities.post("/:id/lose", postLose);
 opportunities.post("/:id/follow-up", postFollowUp);
 opportunities.post("/:id/snooze", postSnooze);
+opportunities.post("/:id/comments", postComment);
