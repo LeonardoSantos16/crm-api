@@ -18,6 +18,7 @@ import {
   loseOpportunity,
   moveOpportunity,
   snoozeOpportunity,
+  updateOpportunity,
 } from "../services/opportunities.service.ts";
 import { opportunityNotFound } from "../services/visibility.ts";
 
@@ -116,6 +117,27 @@ const createSchema = z.object({
   estimatedValue: z.number().positive().optional(),
 });
 
+const optionalDate = z
+  .string()
+  .refine(isCalendarDate, "Expected a YYYY-MM-DD date")
+  .nullable()
+  .optional();
+
+const updateSchema = z
+  .object({
+    companyName: requiredName.optional(),
+    contactName: requiredName.optional(),
+    contactPhone: z.string().trim().max(30).nullable().optional(),
+    contactEmail: z.string().trim().pipe(z.email()).nullable().optional(),
+    proposalValidUntil: optionalDate,
+    eventDate: optionalDate,
+    items: z.array(itemSchema).optional(),
+    estimatedValue: z.number().positive().nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, {
+    message: "At least one field is required",
+  });
+
 function parseOpportunityId(value: string) {
   if (!POSITIVE_INTEGER.test(value)) throw opportunityNotFound();
   return Number(value);
@@ -182,4 +204,14 @@ export async function postOpportunity(req: Request, res: Response) {
   res
     .status(201)
     .json(await createOpportunity(res.locals.user, input, res.locals.now));
+}
+
+export async function patchOpportunity(
+  req: Request<{ id: string }>,
+  res: Response,
+) {
+  const id = parseOpportunityId(req.params.id);
+  const input = updateSchema.parse(req.body);
+
+  res.json(await updateOpportunity(res.locals.user, id, input, res.locals.now));
 }

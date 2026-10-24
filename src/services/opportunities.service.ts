@@ -5,7 +5,11 @@ import {
   type CalendarDate,
 } from "../domain/dates.ts";
 import { isFinalStage, type Stage } from "../domain/stages.ts";
-import { checkTransition } from "../domain/transitions.ts";
+import {
+  checkTransition,
+  missingValueOrItems,
+  type MissingField,
+} from "../domain/transitions.ts";
 import { AppError } from "../errors/app-error.ts";
 import type {
   FollowUpChannel,
@@ -66,6 +70,14 @@ export type SnoozeInput = {
   reason?: string | undefined;
 };
 
+const missingValueOrItemsError = (missing: MissingField[]) =>
+  new AppError(
+    422,
+    "MISSING_VALUE_OR_ITEMS",
+    "Estimated value and at least one item are required",
+    { missing },
+  );
+
 export const finalStageError = () =>
   new AppError(409, "FINAL_STAGE", "Opportunity is in a final stage");
 
@@ -74,6 +86,28 @@ const loadDetail = (tx: Prisma.TransactionClient, id: number) =>
     where: { id },
     include: opportunityDetailInclude,
   });
+
+const toOptionalDbDate = (date: CalendarDate | null | undefined) =>
+  date ? toDbDate(date) : date;
+
+async function findOrCreateCompany(tx: Prisma.TransactionClient, name: string) {
+  return (
+    (await tx.company.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+    })) ?? (await tx.company.create({ data: { name } }))
+  );
+}
+
+async function replaceItems(
+  tx: Prisma.TransactionClient,
+  opportunityId: number,
+  items: ItemInput[],
+) {
+  await tx.opportunityItem.deleteMany({ where: { opportunityId } });
+  await tx.opportunityItem.createMany({
+    data: items.map((item) => ({ ...item, opportunityId })),
+  });
+}
 
 export async function applyStageChange(
   tx: Prisma.TransactionClient,
@@ -182,21 +216,9 @@ export function moveOpportunity(
         { reason: result.reason },
       );
     }
-    if (result.missing) {
-      throw new AppError(
-        422,
-        "MISSING_VALUE_OR_ITEMS",
-        "Estimated value and at least one item are required",
-        { missing: result.missing },
-      );
-    }
+    if (result.missing) throw missingValueOrItemsError(result.missing);
 
-    if (complete?.items) {
-      await tx.opportunityItem.deleteMany({ where: { opportunityId: id } });
-      await tx.opportunityItem.createMany({
-        data: complete.items.map((item) => ({ ...item, opportunityId: id })),
-      });
-    }
+    if (complete?.items) await replaceItems(tx, id, complete.items);
 
     await applyStageChange(tx, {
       id,
@@ -428,10 +450,7 @@ export async function createOpportunity(
 ) {
   const owner = await resolveOwner(user, ownerId);
   const opportunity = await prisma.$transaction(async (tx) => {
-    const company =
-      (await tx.company.findFirst({
-        where: { name: { equals: companyName, mode: "insensitive" } },
-      })) ?? (await tx.company.create({ data: { name: companyName } }));
+    const company = await findOrCreateCompany(tx, companyName);
     const { id } = await tx.opportunity.create({
       data: {
         ...data,
@@ -454,4 +473,51 @@ export async function createOpportunity(
   });
 
   return toOpportunityDetail(opportunity, now);
+}
+
+export type UpdateInput = {
+  companyName?: string | undefined;
+  contactName?: string | undefined;
+  contactPhone?: string | null | undefined;
+  contactEmail?: string | null | undefined;
+  proposalValidUntil?: CalendarDate | null | undefined;
+  eventDate?: CalendarDate | null | undefined;
+  items?: ItemInput[] | undefined;
+  estimatedValue?: number | null | undefined;
+};
+
+export function updateOpportunity(
+  user: CurrentUser,
+  id: number,
+  { companyName, items, proposalValidUntil, eventDate, ...data }: UpdateInput,
+  now: Date,
+) {
+  return actOnOpenOpportunity(user, id, now, async (tx, current) => {
+    if (current.stage !== "FIRST_CONTACT") {
+      const missing = missingValueOrItems({
+        hasEstimatedValue:
+          data.estimatedValue === undefined
+            ? current.estimatedValue !== null
+            : data.estimatedValue !== null,
+        itemCount:
+          items?.length ??
+          (await tx.opportunityItem.count({ where: { opportunityId: id } })),
+      });
+      if (missing.length > 0) throw missingValueOrItemsError(missing);
+    }
+
+    const company = companyName
+      ? await findOrCreateCompany(tx, companyName)
+      : undefined;
+    await tx.opportunity.update({
+      where: { id },
+      data: {
+        ...data,
+        ...(company ? { companyId: company.id } : {}),
+        proposalValidUntil: toOptionalDbDate(proposalValidUntil),
+        eventDate: toOptionalDbDate(eventDate),
+      },
+    });
+    if (items) await replaceItems(tx, id, items);
+  });
 }

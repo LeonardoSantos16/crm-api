@@ -3,6 +3,7 @@ import { getHealth } from "../controllers/health.controller.ts";
 import {
   getOpportunities,
   getOpportunity,
+  patchOpportunity,
   postComment,
   postFollowUp,
   postLose,
@@ -28,6 +29,7 @@ api.use("/opportunities", requireUser, opportunities);
 opportunities.get("/", getOpportunities);
 opportunities.post("/", postOpportunity);
 opportunities.get("/:id", getOpportunity);
+opportunities.patch("/:id", patchOpportunity);
 opportunities.post("/:id/move", postMove);
 opportunities.post("/:id/lose", postLose);
 opportunities.post("/:id/follow-up", postFollowUp);
