@@ -125,6 +125,8 @@ Avaliados nesta ordem:
 1. **Percentual do prazo consumido**, do maior para o menor: `(hoje − (vencimento − prazo)) / prazo`. Dias brutos não são comparáveis entre etapas com prazos diferentes; normalizar pelo prazo torna a comparação justa.
 2. **Desempate pelo valor estimado**, do maior para o menor. Oportunidades sem valor ficam por último.
 
+O percentual não é limitado nem arredondado. Quando a próxima data ou o adiamento fica além do prazo da etapa, ele é negativo: um retorno em Follow-up (prazo de 6 dias) marcado para daqui a 30 dias dá −400%. Assim, entre oportunidades com data futura, a que vence antes continua na frente. O front limita a barra de progresso a 0% e arredonda o valor exibido.
+
 A ordenação alternativa usa só o valor. Fechamento e perdidas, que não têm alerta, aparecem das mais recentes para as mais antigas na ordenação por prioridade.
 
 ### 3.6 Exemplo com os dados do case
