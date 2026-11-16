@@ -3,7 +3,9 @@ import { z } from "zod";
 import { isCalendarDate } from "../domain/dates.ts";
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   PORT: z.coerce.number().int().positive().default(3333),
   DATABASE_URL: z.string().min(1),
   CORS_ORIGIN: z.string().min(1).default("http://localhost:3000"),
