@@ -155,7 +155,7 @@ O problema 4 foi implementado (seção [Automação](#automação-alerta-de-reto
 
 **Ideia:** responder o lead na hora, automaticamente, e manter o vendedor cobrado pelo contato real.
 
-- **E-mail automático no cadastro:** ao criar a oportunidade, a API grava na mesma transação um envio pendente numa tabela de saída (outbox). Um worker envia em segundos um e-mail de boas-vindas, com uma apresentação da Nobre Brindes e o aviso de que um vendedor vai entrar em contato. Se o envio falhar, ele é tentado de novo.
+- **E-mail automático no cadastro:** ao criar a oportunidade, a API grava na mesma transação um envio pendente numa tabela de saída (outbox). Um worker envia em segundos um e-mail de boas-vindas, com uma apresentação da empresa e o aviso de que um vendedor vai entrar em contato. Se o envio falhar, ele é tentado de novo.
 - **Job de hora em hora:** reprocessa os envios que falharam e encontra leads em Primeiro Contato que ficaram sem e-mail.
 - **O e-mail não substitui o contato:** a oportunidade continua em Primeiro Contato, e o prazo de 1 dia do alerta de retorno segue valendo. Se ninguém ligar, ela aparece como atrasada e depois escala para o gestor.
 
