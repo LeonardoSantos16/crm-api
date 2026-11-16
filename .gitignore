@@ -5,3 +5,5 @@ coverage/
 .env*
 !.env.example
 src/generated
+implementação-backend.md
+case-tecnico.md

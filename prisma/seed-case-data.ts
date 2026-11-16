@@ -111,80 +111,85 @@ const opportunities: {
 ];
 
 export async function seedCaseData(prisma: PrismaClient) {
-  await prisma.$transaction(async (tx) => {
-    await tx.comment.deleteMany();
-    await tx.snooze.deleteMany();
-    await tx.followUp.deleteMany();
-    await tx.stageChange.deleteMany();
-    await tx.opportunityItem.deleteMany();
-    await tx.opportunity.deleteMany();
-    await tx.company.deleteMany();
-    await tx.user.deleteMany();
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.comment.deleteMany();
+      await tx.snooze.deleteMany();
+      await tx.followUp.deleteMany();
+      await tx.stageChange.deleteMany();
+      await tx.opportunityItem.deleteMany();
+      await tx.opportunity.deleteMany();
+      await tx.company.deleteMany();
+      await tx.user.deleteMany();
 
-    const manager = await tx.user.create({
-      data: { name: "Marcos", role: "MANAGER" },
-    });
-    const sellers = new Map<string, number>();
-    for (const name of ["Ana", "Bruno", "Carla"]) {
-      const seller = await tx.user.create({
-        data: { name, managerId: manager.id },
+      const manager = await tx.user.create({
+        data: { name: "Marcos", role: "MANAGER" },
       });
-      sellers.set(name, seller.id);
-    }
+      const sellers = new Map<string, number>();
+      for (const name of ["Ana", "Bruno", "Carla"]) {
+        const seller = await tx.user.create({
+          data: { name, managerId: manager.id },
+        });
+        sellers.set(name, seller.id);
+      }
 
-    for (const opp of opportunities) {
-      const stageEnteredAt = contactAt(opp.lastContact);
-      const company = await tx.company.upsert({
-        where: { name: opp.company },
-        create: { name: opp.company },
-        update: {},
-      });
-      await tx.opportunity.create({
-        data: {
-          id: opp.id,
-          estimatedValue: opp.estimatedValue,
-          lastContactAt: contactAt(opp.lastContact),
-          proposalValidUntil: opp.proposalValidUntil
-            ? calendarDate(opp.proposalValidUntil)
-            : null,
-          eventDate: calendarDate(opp.eventDate),
-          stage: opp.stage,
-          stageEnteredAt,
-          lossReason: opp.lossReason ?? null,
-          lossDetail: opp.lossDetail ?? null,
-          companyId: company.id,
-          ownerId: sellers.get(opp.owner)!,
-          items: {
-            create: {
-              description: opp.gift,
-              quantity: opp.quantity,
-              unitValue: (Number(opp.estimatedValue) / opp.quantity).toFixed(2),
+      for (const opp of opportunities) {
+        const stageEnteredAt = contactAt(opp.lastContact);
+        const company = await tx.company.upsert({
+          where: { name: opp.company },
+          create: { name: opp.company },
+          update: {},
+        });
+        await tx.opportunity.create({
+          data: {
+            id: opp.id,
+            estimatedValue: opp.estimatedValue,
+            lastContactAt: contactAt(opp.lastContact),
+            proposalValidUntil: opp.proposalValidUntil
+              ? calendarDate(opp.proposalValidUntil)
+              : null,
+            eventDate: calendarDate(opp.eventDate),
+            stage: opp.stage,
+            stageEnteredAt,
+            lossReason: opp.lossReason ?? null,
+            lossDetail: opp.lossDetail ?? null,
+            companyId: company.id,
+            ownerId: sellers.get(opp.owner)!,
+            items: {
+              create: {
+                description: opp.gift,
+                quantity: opp.quantity,
+                unitValue: (Number(opp.estimatedValue) / opp.quantity).toFixed(
+                  2,
+                ),
+              },
             },
-          },
-          stageChanges: {
-            create: opp.lostFrom
-              ? [
-                  {
+            stageChanges: {
+              create: opp.lostFrom
+                ? [
+                    {
+                      fromStage: null,
+                      toStage: opp.lostFrom,
+                      changedAt: stageEnteredAt,
+                    },
+                    {
+                      fromStage: opp.lostFrom,
+                      toStage: opp.stage,
+                      changedAt: stageEnteredAt,
+                    },
+                  ]
+                : {
                     fromStage: null,
-                    toStage: opp.lostFrom,
-                    changedAt: stageEnteredAt,
-                  },
-                  {
-                    fromStage: opp.lostFrom,
                     toStage: opp.stage,
                     changedAt: stageEnteredAt,
                   },
-                ]
-              : {
-                  fromStage: null,
-                  toStage: opp.stage,
-                  changedAt: stageEnteredAt,
-                },
+            },
           },
-        },
-      });
-    }
+        });
+      }
 
-    await tx.$executeRaw`SELECT setval(pg_get_serial_sequence('"Opportunity"', 'id'), (SELECT MAX(id) FROM "Opportunity"))`;
-  });
+      await tx.$executeRaw`SELECT setval(pg_get_serial_sequence('"Opportunity"', 'id'), (SELECT MAX(id) FROM "Opportunity"))`;
+    },
+    { maxWait: 10_000, timeout: 120_000 },
+  );
 }
