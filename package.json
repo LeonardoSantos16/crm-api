@@ -11,6 +11,7 @@
     "dev": "node --watch src/server.ts",
     "start": "node src/server.ts",
     "test": "vitest run",
+    "build": "npm ci && npx prisma generate && npx prisma migrate deploy",
     "test:watch": "vitest",
     "typecheck": "tsc",
     "lint": "eslint .",
